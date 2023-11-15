@@ -27,7 +27,7 @@ metadata.tex: metadata.yaml
 # missing file reference and interactively asking you for an alternative.
 
 article.pdf: article.tex content.tex bibliography.bib metadata.tex rescience.cls
-	latexmk -pdf -pdflatex="xelatex -interaction=nonstopmode" -use-make article.tex || xelatex -interaction=nonstopmode article.tex || xelatex -interaction=nonstopmode article.tex || exit 0
+	latexmk -pdf -pdflatex="xelatex -interaction=nonstopmode" -use-make article.tex
 
 article.bbl: article.bcf
 	biber article

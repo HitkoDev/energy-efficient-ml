@@ -10,42 +10,27 @@ title: "ReScience (R)evolution"
 # List of authors with name, orcid number, email and affiliation
 # Affiliation "*" means contact author (required even for single-authored papers)
 # To include author suffix format name as Last Suffix, First M.I. (e.g. Schackart III, Kenneth E.)
-authors:
-  - name: Konrad Hinsen
-    orcid: 0000-0003-0330-9428
-    email: konrad.hinsen@cnrs.fr
-    affiliations: 1,2
-    
+authors:    
   - name: Nicolas P. Rougier
     orcid: 0000-0002-6972-589X
     email: Nicolas.Rougier@inria.fr
-    affiliations: 3,4,5,*      # * is for contact author
+    affiliations: 1
+  - name: Nicolas P. Rougier
+    orcid: 0000-0002-6972-589X
+    email: Nicolas.Rougier@inria.fr
+    affiliations: 1
+  - name: Marko Novak
+    orcid: 0009-0005-1317-3423
+    email: mn3983@student.uni-lj.si
+    affiliations: 1,*
 
 # List of affiliations with code (corresponding to author affiliations), name
 # and address. You can also use these affiliations to add text such as "Equal
 # contributions" as name (with no address).
 affiliations:
   - code:    1
-    name:    Centre de Biophysique Moléculaire, CNRS UPR4301
-    address: Orléans, France
-    
-  - code:    2
-    name:    Synchrotron SOLEIL, Division Expériences
-    address: Gif sur Yvette, France
-    
-  - code:    3
-    name:    INRIA Bordeaux Sud-Ouest
-    address: Bordeaux, France
-    
-  - code:    4
-    name:    LaBRI, Université de Bordeaux, Institut Polytechnique de Bordeaux,
-             Centre National de la Recherche Scientifique, UMR 5800
-    address: Talence, France
-    
-  - code:    5
-    name:    Institut des Maladies Neurodégénératives, Université  de Bordeaux,
-             Centre National de la Recherche Scientifique, UMR 5293
-    address: Bordeaux, France
+    name:    University of Ljubljana, Faculty of Computer and Information Science
+    address: Ljubljana, Slovenia
 
 
 # List of keywords (adding the programming language might be a good idea)
@@ -56,7 +41,7 @@ keywords: rescience c, rescience x
 # Software Heritage.
 #   see https://guides.github.com/activities/citable-code/
 code:
-  - url: https://github.com/rescience-c/template
+  - url: https://github.com/HitkoDev/energy-efficient-ml
   - doi: 
   - swh: 
 
@@ -67,10 +52,10 @@ data:
 
 # Information about the original article that has been replicated
 replication:
- - cite: # Full textual citation
- - bib:  # Bibtex key (if any) in your bibliography file
- - url:  # URL to the PDF, try to link to a non-paywall version
- - doi:  # Regular digital object identifier
+  - cite: V. S. Marco, B. Taylor, Z. Wang, and Y. Elkhatib. Optimizing Deep Learning Inference on Embedded Systems Through Adaptive Model Selection, 2019.
+  - bib: marco2019optimizing
+  - url: https://arxiv.org/abs/1911.04946
+  - doi: 10.48550/arXiv.1911.04946
 
 # Don't forget to surround abstract with double quotes
 abstract: "Three years have passed since ReScience published its first article
