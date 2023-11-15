@@ -1,4 +1,4 @@
-The original paper uses GNMT models with 2, 3, 4, and 8 layers.
+The original paper uses GNMT models with 2, 4, and 8 layers.
 We couldn't find existing models trained on the dataset, so we include the NVIDIA implementation, which can be trained on the `wmt16_en_de` dataset using the specified values for `--num_layers` parameter to match the models from the paper.
 
 # GNMT v2 For TensorFlow
