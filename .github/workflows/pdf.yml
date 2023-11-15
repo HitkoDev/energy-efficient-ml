@@ -1,0 +1,25 @@
+name: Build report PDF
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  build_latex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+
+      - name: Compile LaTeX document
+        uses: dante-ev/latex-action@latest
+        with:
+          entrypoint: ./report.sh
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./report/article.pdf"
+          artifactContentType: application/pdf
