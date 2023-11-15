@@ -11,18 +11,18 @@ title: "ReScience (R)evolution"
 # Affiliation "*" means contact author (required even for single-authored papers)
 # To include author suffix format name as Last Suffix, First M.I. (e.g. Schackart III, Kenneth E.)
 authors:    
-  - name: Nicolas P. Rougier
-    orcid: 0000-0002-6972-589X
-    email: Nicolas.Rougier@inria.fr
-    affiliations: 1
-  - name: Nicolas P. Rougier
-    orcid: 0000-0002-6972-589X
-    email: Nicolas.Rougier@inria.fr
+  - name: Drejc Pesjak
+    orcid: #0000-0000-0000-0000 
+    email: dp8949@student.uni-lj.si
+    affiliations: 1,*
+  - name: Timotej Ciglarič
+    orcid: #0000-0000-0000-0000
+    email: tc7476@student.uni-lj.si
     affiliations: 1
   - name: Marko Novak
     orcid: 0009-0005-1317-3423
     email: mn3983@student.uni-lj.si
-    affiliations: 1,*
+    affiliations: 1
 
 # List of affiliations with code (corresponding to author affiliations), name
 # and address. You can also use these affiliations to add text such as "Equal
