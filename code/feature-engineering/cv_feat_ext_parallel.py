@@ -109,7 +109,7 @@ dataset_dir = '../../../images/ILSVRC/Data/CLS-LOC/val/'
 
 # Assuming images are directly under the dataset directory
 image_paths = [os.path.join(dataset_dir, filename) for filename in os.listdir(dataset_dir)]
-image_paths = image_paths[:10000]  # Example with a subset of 1000 images
+# image_paths = image_paths[:10000]  # Example with a subset of 1000 images
 
 # Extract features for each image in parallel
 features_list = process_image_parallel(image_paths, max_workers=8)  # Adjust max_workers as needed
