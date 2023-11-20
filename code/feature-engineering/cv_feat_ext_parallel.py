@@ -19,6 +19,15 @@ def calculate_edges(img):
     edge_histogram, _ = np.histogram(edge_lengths, bins=7, range=(1, edge_lengths+1))
     return edge_histogram
 
+def calculate_edges_new(img):
+    edges = feature.canny(color.rgb2gray(img))
+    contours = measure.find_contours(edges, level=0)
+
+    # Calculating the length of each contour
+    contour_lengths = [np.sum(np.sqrt(np.sum(np.diff(contour, axis=0)**2, axis=1))) for contour in contours]
+    edge_histogram, _ = np.histogram(contour_lengths, bins=7, range=(1, max(contour_lengths) + 1))
+    return edge_histogram
+
 def calculate_edge_angles(img):
     # Convert to grayscale and detect edges
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -57,7 +66,7 @@ def process_image(image_path):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Feature extraction
-    keypoints = cv2.goodFeaturesToTrack(gray, maxCorners=100, qualityLevel=0.01, minDistance=10)
+    keypoints = cv2.goodFeaturesToTrack(gray, maxCorners=200, qualityLevel=0.02, minDistance=5)
     n_keypoints = keypoints.shape[0] if keypoints is not None else 0
 
     avg_brightness = calculate_brightness(gray)
@@ -68,7 +77,7 @@ def process_image(image_path):
 
     contrast = calculate_contrast(gray)
 
-    edges = calculate_edges(image)
+    edges = calculate_edges_new(image)
     edge_len_features = {f'edge_length{i+1}': edges[i] for i in range(len(edges))}
     edge_angles = calculate_edge_angles(image)
     edge_angle_features = {f'edge_angle{i+1}': edge_angles[i] for i in range(len(edge_angles))}
