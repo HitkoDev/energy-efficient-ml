@@ -1,5 +1,6 @@
 import pandas as pd
 import spacy
+from nltk.corpus import wordnet as wn
 from nltk.tokenize import word_tokenize
 from tokenizers import ByteLevelBPETokenizer
 from sklearn.feature_extraction.text import CountVectorizer
@@ -12,29 +13,41 @@ def create_bow_model(sentences):
     vectorizer.fit(sentences)
     return vectorizer
 
-def extract_features(sentence, vectorizer):
-    doc = nlp(sentence)
-    tokens = [token.text for token in doc]
-    pos_counts = Counter(token.pos_ for token in doc)
-    # bpe_tokens = bpe_tokenizer.encode(sentence)
-    bow = vectorizer.transform([sentence]).toarray()[0]
+def is_satellite_adjective(word):
+    synsets = wn.synsets(word, pos=wn.ADJ_SAT)
+    return bool(synsets)
 
-    n_words = len(tokens)
-    # n_bpe_chars = len(bpe_tokens.tokens)
-    # avg_bpe = n_bpe_chars / n_words if n_words else 0
+def extract_features(sentence, bow_vectorizer, bpe_tokenizer):
+    doc = nlp(sentence)
+    # Filtered tokens list: includes only words
+    word_tokens = [token.text for token in doc if token.is_alpha]
+    # Original tokens list: includes words, punctuation, and symbols
+    tokens = [token.text for token in doc]
+    # Part-of-speech counts
+    pos_counts = Counter(token.pos_ for token in doc if token.is_alpha)
+
+    # n_words - count of actual words in the sentence
+    # n_tokens - tokens can include words, punctuation, symbols, and other elements
+    n_words = len(word_tokens)
     n_tokens = len(word_tokenize(sentence))
     avg_noun = pos_counts['NOUN'] / n_words if n_words else 0
     avg_verb = pos_counts['VERB'] / n_words if n_words else 0
     avg_adj = pos_counts['ADJ'] / n_words if n_words else 0
-    avg_sat_adj = pos_counts['ADJ'] / n_words if n_words else 0
+    # satellite_adjs - https://stackoverflow.com/a/18817481
+    satellite_adjs = sum(1 for word in word_tokens if is_satellite_adjective(word))
+    avg_sat_adj = satellite_adjs / n_words if n_words else 0
     avg_adverb = pos_counts['ADV'] / n_words if n_words else 0
     avg_punc = sum(1 for char in sentence if char in string.punctuation) / n_words if n_words else 0
-    avg_word_length = sum(len(word) for word in tokens) / n_words if n_words else 0
+    avg_word_length = sum(len(word) for word in word_tokens) / n_words if n_words else 0
 
+    bpe_tokens = bpe_tokenizer.encode(sentence)
+    n_bpe_chars = len(bpe_tokens.tokens)
+    avg_bpe = n_bpe_chars / n_words if n_words else 0
+    
     feature_dict = {
         'n_words': n_words,
-        # 'n_bpe_chars': n_bpe_chars,
-        # 'avg_bpe': avg_bpe,
+        'n_bpe_chars': n_bpe_chars,
+        'avg_bpe': avg_bpe,
         'n_tokens': n_tokens,
         'avg_noun': avg_noun,
         'avg_verb': avg_verb,
@@ -45,6 +58,7 @@ def extract_features(sentence, vectorizer):
         'avg_word_length': avg_word_length
     }
 
+    bow = bow_vectorizer.transform([sentence]).toarray()[0]
     # Add BoW features
     for i, val in enumerate(bow):
         feature_dict[f'bow_{i}'] = val
@@ -52,20 +66,40 @@ def extract_features(sentence, vectorizer):
     return feature_dict
 
 
-# base_dir = "data/wmt16_de_en"
-# base_dir = "../../../wmt16de"
 base_dir = "/home/drew99/School/MLDS2/wmt16de"
-
 
 # Load Spacy's model for part-of-speech tagging
 nlp = spacy.load('en_core_web_sm')
 
+# Ensure WordNet and NLTK's punkt are downloaded
+# import nltk
+# nltk.download('punkt')
+# nltk.download('wordnet')
+
+
+import json
+
+# Path to the BPE vocabulary file
+vocab_file_path = f'{base_dir}/vocab.bpe.32000'
+# Path to save the JSON-formatted vocabulary file
+json_vocab_file_path = f'{base_dir}/vocab.json'
+
+def convert_vocab_to_json(vocab_file_path, json_vocab_file_path):
+    with open(vocab_file_path, 'r', encoding='utf-8') as file:
+        vocab = {line.strip(): idx for idx, line in enumerate(file)}
+
+    with open(json_vocab_file_path, 'w', encoding='utf-8') as json_file:
+        json.dump(vocab, json_file, ensure_ascii=False)
+
+convert_vocab_to_json(vocab_file_path, json_vocab_file_path)
+
+
 # Initialize BPE tokenizer
 # bpe_tokenizer = ByteLevelBPETokenizer('path/to/vocab', 'path/to/merges')
-# bpe_tokenizer = ByteLevelBPETokenizer(
-#     f'{base_dir}/vocab.bpe.32000', 
-#     f'{base_dir}/bpe.32000'
-# )
+bpe_tokenizer = ByteLevelBPETokenizer(
+    f'{base_dir}/vocab.json', 
+    f'{base_dir}/bpe.32000'
+)
 
 # Update paths to where the training files are located
 english_file_path = f'{base_dir}/train.en'
@@ -83,7 +117,7 @@ english_sentences = english_sentences[:5000]
 bow_vectorizer = create_bow_model(english_sentences)
 
 # Extract features from English sentences
-features_list = [extract_features(sentence, bow_vectorizer) for sentence in english_sentences]
+features_list = [extract_features(sentence, bow_vectorizer, bpe_tokenizer) for sentence in english_sentences]
 
 # Convert to DataFrame and save to CSV
 df = pd.DataFrame(features_list)
