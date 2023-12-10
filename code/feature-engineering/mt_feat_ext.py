@@ -108,11 +108,17 @@ german_file_path = f'{base_dir}/train.de'
 # english_file_path = f'{base_dir}/train.tok.clean.en'
 # german_file_path = f'{base_dir}/train.tok.clean.de'
 
-# Read the dataset
+# Load the first 5000 sentences from the English file
+num_sentences = 5000
+english_sentences = []
 with open(english_file_path, 'r', encoding='utf-8') as file_en:
-    english_sentences = file_en.readlines()
+    for i, line in enumerate(file_en):
+        if i < num_sentences:
+            english_sentences.append(line)
+        else:
+            break
 
-english_sentences = english_sentences[:5000]
+# english_sentences = english_sentences[:5000]
 # Create a BoW model based on the English sentences
 bow_vectorizer = create_bow_model(english_sentences)
 
