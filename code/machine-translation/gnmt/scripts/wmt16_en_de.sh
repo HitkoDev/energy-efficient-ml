@@ -13,28 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# -----------------------------------------------------------------------
-#
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 set -e
 
-export LANG=C.UTF-8
-export LC_ALL=C.UTF-8
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-OUTPUT_DIR=${1:-"data/wmt16_de_en"}
+OUTPUT_DIR="${1:-wmt16_de_en}"
 echo "Writing to ${OUTPUT_DIR}. To change this, set the OUTPUT_DIR environment variable."
 
 OUTPUT_DIR_DATA="${OUTPUT_DIR}/data"
@@ -88,9 +72,6 @@ wc -l "${OUTPUT_DIR}/train.de"
 if [ ! -d "${OUTPUT_DIR}/mosesdecoder" ]; then
   echo "Cloning moses for data processing"
   git clone https://github.com/moses-smt/mosesdecoder.git "${OUTPUT_DIR}/mosesdecoder"
-  cd ${OUTPUT_DIR}/mosesdecoder
-  git reset --hard 8c5eaa1a122236bbf927bde4ec610906fea599e6
-  cd -
 fi
 
 # Convert SGM files
@@ -135,37 +116,17 @@ for f in ${OUTPUT_DIR}/*.en; do
   ${OUTPUT_DIR}/mosesdecoder/scripts/tokenizer/tokenizer.perl -q -l en -threads 8 < $f > ${f%.*}.tok.en
 done
 
-# Clean all corpora
-for f in ${OUTPUT_DIR}/*.en; do
+# Clean train corpora
+for f in ${OUTPUT_DIR}/train.tok.en; do
   fbase=${f%.*}
   echo "Cleaning ${fbase}..."
   ${OUTPUT_DIR}/mosesdecoder/scripts/training/clean-corpus-n.perl $fbase de en "${fbase}.clean" 1 80
 done
 
-# Create dev dataset
-cat "${OUTPUT_DIR}/newstest2015.tok.clean.en" \
-   "${OUTPUT_DIR}/newstest2016.tok.clean.en" \
-   > "${OUTPUT_DIR}/newstest_dev.tok.clean.en"
-
-cat "${OUTPUT_DIR}/newstest2015.tok.clean.de" \
-   "${OUTPUT_DIR}/newstest2016.tok.clean.de" \
-   > "${OUTPUT_DIR}/newstest_dev.tok.clean.de"
-
-# Filter datasets
-python3 scripts/filter_dataset.py \
-   -f1 ${OUTPUT_DIR}/train.tok.clean.en \
-   -f2 ${OUTPUT_DIR}/train.tok.clean.de
-python3 scripts/filter_dataset.py \
-   -f1 ${OUTPUT_DIR}/newstest_dev.tok.clean.en \
-   -f2 ${OUTPUT_DIR}/newstest_dev.tok.clean.de
-
 # Generate Subword Units (BPE)
 # Clone Subword NMT
 if [ ! -d "${OUTPUT_DIR}/subword-nmt" ]; then
   git clone https://github.com/rsennrich/subword-nmt.git "${OUTPUT_DIR}/subword-nmt"
-  cd ${OUTPUT_DIR}/subword-nmt
-  git reset --hard 48ba99e657591c329e0003f0c6e32e493fa959ef
-  cd -
 fi
 
 # Learn Shared BPE
@@ -184,8 +145,9 @@ for merge_ops in 32000; do
   done
 
   # Create vocabulary file for BPE
+  echo -e "<unk>\n<s>\n</s>" > "${OUTPUT_DIR}/vocab.bpe.${merge_ops}"
   cat "${OUTPUT_DIR}/train.tok.clean.bpe.${merge_ops}.en" "${OUTPUT_DIR}/train.tok.clean.bpe.${merge_ops}.de" | \
-    ${OUTPUT_DIR}/subword-nmt/subword_nmt/get_vocab.py | cut -f1 -d ' ' > "${OUTPUT_DIR}/vocab.bpe.${merge_ops}"
+    ${OUTPUT_DIR}/subword-nmt/subword_nmt/get_vocab.py | cut -f1 -d ' ' >> "${OUTPUT_DIR}/vocab.bpe.${merge_ops}"
 
 done
 

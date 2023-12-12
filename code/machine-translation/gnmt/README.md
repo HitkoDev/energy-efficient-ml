@@ -1,836 +1,1262 @@
-The original paper uses GNMT models with 2, 4, and 8 layers.
-We couldn't find existing models trained on the dataset, so we include the NVIDIA implementation, which can be trained on the `wmt16_en_de` dataset using the specified values for `--num_layers` parameter to match the models from the paper.
+# Neural Machine Translation (seq2seq) Tutorial
 
-# GNMT v2 For TensorFlow
+*Authors: Thang Luong, Eugene Brevdo, Rui Zhao ([Google Research Blogpost](https://research.googleblog.com/2017/07/building-your-own-neural-machine.html), [Github](https://github.com/tensorflow/nmt))*
 
-This repository provides a script and recipe to train the GNMT v2 model to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
+*This version of the tutorial requires [TensorFlow Nightly](https://github.com/tensorflow/tensorflow/#installation).
+For using the stable TensorFlow versions, please consider other branches such as
+[tf-1.4](https://github.com/tensorflow/tree/tf-1.4).*
 
-## Table Of Contents
-- [Model overview](#model-overview)
-    * [Model architecture](#model-architecture)
-    * [Default configuration](#default-configuration)
-    * [Feature support matrix](#feature-support-matrix)
-        * [Features](#features)
-    * [Mixed precision training](#mixed-precision-training)
-        * [Enabling mixed precision](#enabling-mixed-precision)
-        * [Enabling TF32](#enabling-tf32)
-- [Setup](#setup)
-    * [Requirements](#requirements)
-- [Quick Start Guide](#quick-start-guide)
-- [Advanced](#advanced)
-    * [Scripts and sample code](#scripts-and-sample-code)
-    * [Parameters](#parameters)
-    * [Command-line options](#command-line-options)
-    * [Getting the data](#getting-the-data)
-        * [Dataset guidelines](#dataset-guidelines)
-    * [Training process](#training-process)
-    * [Inference process](#inference-process)
-        * [Validation process](#validation-process)
-        * [Translation process](#translation-process)
-- [Performance](#performance)
-    * [Benchmarking](#benchmarking)
-        * [Training performance benchmark](#training-performance-benchmark)
-        * [Inference performance benchmark](#inference-performance-benchmark)
-    * [Results](#results)
-        * [Training accuracy results](#training-accuracy-results)
-            * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
-            * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
-            * [Training stability test](#training-stability-test)
-        * [Inference accuracy results](#inference-accuracy-results)
-            * [Inference accuracy: NVIDIA DGX-1 (8x V100 16GB)](#inference-accuracy-nvidia-dgx-1-8x-v100-16gb)
-        * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
-            * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-        * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
-            * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
-            * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
-- [Release notes](#release-notes)
-    * [Changelog](#changelog)
-    * [Known issues](#known-issues)
+*If make use of this codebase for your research, please cite
+[this](#bibtex).*
+
+- [Introduction](#introduction)
+- [Basic](#basic)
+   - [Background on Neural Machine Translation](#background-on-neural-machine-translation)
+   - [Installing the Tutorial](#installing-the-tutorial)
+   - [Training – *How to build our first NMT system*](#training--how-to-build-our-first-nmt-system)
+      - [Embedding](#embedding)
+      - [Encoder](#encoder)
+      - [Decoder](#decoder)
+      - [Loss](#loss)
+      - [Gradient computation & optimization](#gradient-computation--optimization)
+   - [Hands-on – *Let's train an NMT model*](#hands-on--lets-train-an-nmt-model)
+   - [Inference – *How to generate translations*](#inference--how-to-generate-translations)
+- [Intermediate](#intermediate)
+   - [Background on the Attention Mechanism](#background-on-the-attention-mechanism)
+   - [Attention Wrapper API](#attention-wrapper-api)
+   - [Hands-on – *Building an attention-based NMT model*](#hands-on--building-an-attention-based-nmt-model)
+- [Tips & Tricks](#tips--tricks)
+   - [Building Training, Eval, and Inference Graphs](#building-training-eval-and-inference-graphs)
+   - [Data Input Pipeline](#data-input-pipeline)
+   - [Other details for better NMT models](#other-details-for-better-nmt-models)
+      - [Bidirectional RNNs](#bidirectional-rnns)
+      - [Beam search](#beam-search)
+      - [Hyperparameters](#hyperparameters)
+      - [Multi-GPU training](#multi-gpu-training)
+- [Benchmarks](#benchmarks)
+   - [IWSLT English-Vietnamese](#iwslt-english-vietnamese)
+   - [WMT German-English](#wmt-german-english)
+   - [WMT English-German &mdash; *Full Comparison*](#wmt-english-german--full-comparison)
+   - [Standard HParams](#standard-hparams)
+- [Other resources](#other-resources)
+- [Acknowledgment](#acknowledgment)
+- [References](#references)
+- [BibTex](#bibtex)
 
 
-## Model overview
+# Introduction
 
-The GNMT v2 model is similar to the one discussed in the [Google's Neural Machine
-Translation System: Bridging the Gap between Human and Machine
-Translation](https://arxiv.org/abs/1609.08144) paper.
+Sequence-to-sequence (seq2seq) models
+([Sutskever et al., 2014](https://papers.nips.cc/paper/5346-sequence-to-sequence-learning-with-neural-networks.pdf),
+[Cho et al., 2014](http://emnlp2014.org/papers/pdf/EMNLP2014179.pdf)) have
+enjoyed great success in a variety of tasks such as machine translation, speech
+recognition, and text summarization. This tutorial gives readers a full
+understanding of seq2seq models and shows how to build a competitive seq2seq
+model from scratch. We focus on the task of Neural Machine Translation (NMT)
+which was the very first testbed for seq2seq models with
+wild
+[success](https://research.googleblog.com/2016/09/a-neural-network-for-machine.html). The
+included code is lightweight, high-quality, production-ready, and incorporated
+with the latest research ideas. We achieve this goal by:
 
-The most important difference between the two models is in the attention
-mechanism. In our model, the output from the first LSTM layer of the decoder
-goes into the attention module, then the re-weighted context is concatenated
-with inputs to all subsequent LSTM layers in the decoder at the current
-timestep.
+1. Using the recent decoder / attention
+   wrapper
+   [API](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/contrib/seq2seq/python/ops),
+   TensorFlow 1.2 data iterator
+1. Incorporating our strong expertise in building recurrent and seq2seq models
+1. Providing tips and tricks for building the very best NMT models and replicating
+   [Google’s NMT (GNMT) system](https://research.google.com/pubs/pub45610.html).
 
-The same attention mechanism is also implemented in the default
-GNMT-like models from
-[TensorFlow Neural Machine Translation Tutorial](https://github.com/tensorflow/nmt)
-and
-[NVIDIA OpenSeq2Seq Toolkit](https://github.com/NVIDIA/OpenSeq2Seq).
+We believe that it is important to provide benchmarks that people can easily
+replicate. As a result, we have provided full experimental results and
+pretrained our models on the following publicly available datasets:
 
-This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures.  Therefore, researchers can get results 2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+1. *Small-scale*: English-Vietnamese parallel corpus of TED talks (133K sentence
+   pairs) provided by
+   the
+   [IWSLT Evaluation Campaign](https://sites.google.com/site/iwsltevaluation2015/).
+1. *Large-scale*: German-English parallel corpus (4.5M sentence pairs) provided
+   by the [WMT Evaluation Campaign](http://www.statmt.org/wmt16/translation-task.html).
 
-### Model architecture
+We first build up some basic knowledge about seq2seq models for NMT, explaining
+how to build and train a vanilla NMT model. The second part will go into details
+of building a competitive NMT model with attention mechanism. We then discuss
+tips and tricks to build the best possible NMT models (both in speed and
+translation quality) such as TensorFlow best practices (batching, bucketing),
+bidirectional RNNs, beam search, as well as scaling up to multiple GPUs using GNMT attention.
 
-The following image shows the GNMT model architecture:
+# Basic
 
-![TrainingLoss](./img/diagram.png)
+## Background on Neural Machine Translation
 
-### Default configuration
+Back in the old days, traditional phrase-based translation systems performed
+their task by breaking up source sentences into multiple chunks and then
+translated them phrase-by-phrase. This led to disfluency in the translation
+outputs and was not quite like how we, humans, translate. We read the entire
+source sentence, understand its meaning, and then produce a translation. Neural
+Machine Translation (NMT) mimics that!
 
-The following features were implemented in this model:
+<p align="center">
+<img width="80%" src="g3doc/img/encdec.jpg" />
+<br>
+Figure 1. <b>Encoder-decoder architecture</b> – example of a general approach for
+NMT. An encoder converts a source sentence into a "meaning" vector which is
+passed through a <i>decoder</i> to produce a translation.
+</p>
 
-* general:
-  * encoder and decoder are using shared embeddings
-  * data-parallel multi-GPU training
-  * dynamic loss scaling with backoff for Tensor Cores (mixed precision) training
-  * trained with label smoothing loss (smoothing factor 0.1)
+Specifically, an NMT system first reads the source sentence using an *encoder*
+to build
+a
+["thought" vector](https://www.theguardian.com/science/2015/may/21/google-a-step-closer-to-developing-machines-with-human-like-intelligence),
+a sequence of numbers that represents the sentence meaning; a *decoder*, then,
+processes the sentence vector to emit a translation, as illustrated in
+Figure 1. This is often referred to as the *encoder-decoder architecture*. In
+this manner, NMT addresses the local translation problem in the traditional
+phrase-based approach: it can capture *long-range dependencies* in languages,
+e.g., gender agreements; syntax structures; etc., and produce much more fluent
+translations as demonstrated
+by
+[Google Neural Machine Translation systems](https://research.googleblog.com/2016/09/a-neural-network-for-machine.html).
 
-* encoder:
-  * 4-layer LSTM, hidden size 1024, first layer is bidirectional, the rest are
-    unidirectional
-  * with residual connections starting from 3rd layer
-  * dropout is applied on input to all LSTM layers, probability of dropout is
-    set to 0.2
-  * hidden state of LSTM layers is initialized with zeros
-  * weights and bias of LSTM layers is initialized with uniform (-0.1, 0.1)
-    Distribution
+NMT models vary in terms of their exact architectures. A natural choice for
+sequential data is the recurrent neural network (RNN), used by most NMT models.
+Usually an RNN is used for both the encoder and decoder. The RNN models,
+however, differ in terms of: (a) *directionality* – unidirectional or
+bidirectional; (b) *depth* – single- or multi-layer; and (c) *type* – often
+either a vanilla RNN, a Long Short-term Memory (LSTM), or a gated recurrent unit
+(GRU). Interested readers can find more information about RNNs and LSTM on
+this [blog post](http://colah.github.io/posts/2015-08-Understanding-LSTMs/).
 
-* decoder:
-  * 4-layer unidirectional LSTM with hidden size 1024 and fully-connected
-    classifier
-  * with residual connections starting from 3rd layer
-  * dropout is applied on input to all LSTM layers, probability of dropout is
-    set to 0.2
-  * hidden state of LSTM layers is initialized with the last hidden state from
-    encoder
-  * weights and bias of LSTM layers is initialized with uniform (-0.1, 0.1)
-    distribution
-  * weights and bias of fully-connected classifier is initialized with
-    uniform (-0.1, 0.1) distribution
+In this tutorial, we consider as examples a *deep multi-layer RNN* which is
+unidirectional and uses LSTM as a recurrent unit. We show an example of such a
+model in Figure 2. In this example, we build a model to translate a source
+sentence "I am a student" into a target sentence "Je suis étudiant". At a high
+level, the NMT model consists of two recurrent neural networks: the *encoder*
+RNN simply consumes the input source words without making any prediction; the
+*decoder*, on the other hand, processes the target sentence while predicting the
+next words.
 
-* attention:
-  * normalized Bahdanau attention
-  * output from first LSTM layer of decoder goes into attention,
-  then re-weighted context is concatenated with the input to all subsequent
-  LSTM layers of the decoder at the current timestep
-  * linear transform of keys and queries is initialized with uniform (-0.1, 0.1), normalization scalar is initialized with 1.0 / sqrt(1024),     normalization bias is initialized with zero
+For more information, we refer readers
+to [Luong (2016)](https://github.com/lmthang/thesis) which this tutorial is
+based on.
 
-* inference:
-  * beam search with default beam size of 5
-  * with coverage penalty and length normalization, coverage penalty factor is
-    set to 0.1, length normalization factor is set to 0.6 and length
-    normalization constant is set to 5.0
-  * de-tokenized BLEU computed by [SacreBLEU](https://github.com/awslabs/sockeye/tree/master/sockeye_contrib/sacrebleu)
-  * [motivation](https://github.com/awslabs/sockeye/tree/master/sockeye_contrib/sacrebleu#motivation) for choosing SacreBLEU
+<p align="center">
+<img width="48%" src="g3doc/img/seq2seq.jpg" />
+<br>
+Figure 2. <b>Neural machine translation</b> – example of a deep recurrent
+architecture proposed by for translating a source sentence "I am a student" into
+a target sentence "Je suis étudiant". Here, "&lts&gt" marks the start of the
+decoding process while "&lt/s&gt" tells the decoder to stop.
+</p>
 
-When comparing the BLEU score, there are various tokenization approaches and
-BLEU calculation methodologies; therefore, ensure you align similar metrics.
+## Installing the Tutorial
 
-Code from this repository can be used to train a larger, 8-layer GNMT v2 model.
-Our experiments show that a 4-layer model is significantly faster to train and
-yields comparable accuracy on the public
-[WMT16 English-German](http://www.statmt.org/wmt16/translation-task.html)
-dataset. The number of LSTM layers is controlled by the `--num_layers` parameter
-in the `nmt.py` script.
+To install this tutorial, you need to have TensorFlow installed on your system.
+This tutorial requires TensorFlow Nightly. To install TensorFlow, follow
+the [installation instructions here](https://www.tensorflow.org/install/).
 
-### Feature support matrix
+Once TensorFlow is installed, you can download the source code of this tutorial
+by running:
 
-The following features are supported by this model.
-
-| **Feature** | **GNMT TF** |
-|:---:|:--------:|
-| Automatic Mixed Precision | yes |
-
-
-#### Features
-
-The following features are supported by this model.
-
-* Automatic Mixed Precision (AMP) - Computation graphs can be modified by TensorFlow on runtime to support mixed precision training. Detailed explanation of mixed precision can be found in the next section.
-
-
-
-### Mixed precision training
-
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) previously required two steps:
-1.  Porting the model to use the FP16 data type where appropriate.
-2.  Adding loss scaling to preserve small gradient values.
-
-This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta, Turing, and NVIDIA Ampere GPU architectures automatically. The TensorFlow framework code makes all necessary model changes internally.
-
-In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
-
-For information about:
--   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
--   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
--   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
--   APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
-
-#### Enabling mixed precision
-
-Mixed precision is enabled in TensorFlow by using the Automatic Mixed Precision (TF-AMP) extension which casts variables to half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients. In TensorFlow, loss scaling can be applied statically by using simple multiplication of loss by a constant value or automatically, by TF-AMP. Automatic mixed precision makes all the adjustments internally in TensorFlow, providing two benefits over manual operations. First, programmers need not modify network model code, reducing development and maintenance effort. Second, using AMP maintains forward and backward compatibility with all the APIs for defining and running TensorFlow models.
-
-To enable mixed precision, you can simply add the values to the environmental variables inside your training script:
-- Enable TF-AMP graph rewrite:
-  ```
-  os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
-  ```
-
-- Enable Automated Mixed Precision:
-  ```
-  os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
-  ```
-
-#### Enabling TF32
-
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
-
-TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
-
-For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
-
-TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
-
-## Setup
-
-The following section lists the requirements that you need to meet in order to start training the GNMT v2 model.
-
-### Requirements
-
-This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
--   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [TensorFlow 20.06-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
--   Supported GPUs:
-    - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
-    - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
-    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
-
-For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
--   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
--   [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/frameworks/user-guide/index.html#accessing_registry)
--   [Running TensorFlow](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/running.html#running).
-
-For those unable to use the TensorFlow NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
-
-
-## Quick Start Guide
-
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32,
-perform the following steps using the default parameters of the GNMT v2 model
-on the WMT16 English German dataset.
-For the specifics concerning training and inference, see the [Advanced](#advanced) section.
-
-**1. Clone the repository.**
-```
-git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Translation/GNMT
+``` shell
+git clone https://github.com/tensorflow/
 ```
 
-**2. Build the GNMT v2 TensorFlow container.**
-```
-bash scripts/docker/build.sh
-```
+## Training – How to build our first NMT system
 
-**3. Start an interactive session in the NGC container to run.** training/inference.
-```
-bash scripts/docker/interactive.sh
-```
+Let's first dive into the heart of building an NMT model with concrete code
+snippets through which we will explain Figure 2 in more detail. We defer data
+preparation and the full code to later. This part refers to
+file
+[**model.py**](model.py).
 
-**4. Download and preprocess the dataset.**
+At the bottom layer, the encoder and decoder RNNs receive as input the
+following: first, the source sentence, then a boundary marker "\<s\>" which
+indicates the transition from the encoding to the decoding mode, and the target
+sentence.  For *training*, we will feed the system with the following tensors,
+which are in time-major format and contain word indices:
 
-Data will be downloaded to the `data` directory (on the host). The `data`
-directory is mounted to the `/workspace/gnmt/data` location in the Docker
-container.
-```
-bash scripts/wmt16_en_de.sh
-```
+-  **encoder_inputs** [max_encoder_time, batch_size]: source input words.
+-  **decoder_inputs** [max_decoder_time, batch_size]: target input words.
+-  **decoder_outputs** [max_decoder_time, batch_size]: target output words,
+   these are decoder_inputs shifted to the left by one time step with an
+   end-of-sentence tag appended on the right.
 
-**5. Start training.**
+Here for efficiency, we train with multiple sentences (batch_size) at
+once. Testing is slightly different, so we will discuss it later.
 
-All results and logs are saved to the `results` directory (on the host) or to
-the `/workspace/gnmt/results` directory (in the container). The training script
-saves the checkpoint after every training epoch and after every 2000 training steps
-within each epoch. You can modify the results directory using the `--output_dir`
-argument.
+### Embedding
 
+Given the categorical nature of words, the model must first look up the source
+and target embeddings to retrieve the corresponding word representations. For
+this *embedding layer* to work, a vocabulary is first chosen for each language.
+Usually, a vocabulary size V is selected, and only the most frequent V words are
+treated as unique.  All other words are converted to an "unknown" token and all
+get the same embedding.  The embedding weights, one set per language, are
+usually learned during training.
 
-To launch mixed precision training on 1 GPU, run:
-
-```
-python nmt.py --output_dir=results --batch_size=128 --learning_rate=5e-4 --amp
-```
-
-To launch mixed precision training on 8 GPUs, run:
-
-```
-python nmt.py --output_dir=results --batch_size=1024 --num_gpus=8 --learning_rate=2e-3 --amp
-```
-
-To launch FP32 (TF32 on NVIDIA Ampere GPUs) training on 1 GPU, run:
-
-```
-python nmt.py --output_dir=results --batch_size=128 --learning_rate=5e-4
+``` python
+# Embedding
+embedding_encoder = variable_scope.get_variable(
+    "embedding_encoder", [src_vocab_size, embedding_size], ...)
+# Look up embedding:
+#   encoder_inputs: [max_time, batch_size]
+#   encoder_emb_inp: [max_time, batch_size, embedding_size]
+encoder_emb_inp = embedding_ops.embedding_lookup(
+    embedding_encoder, encoder_inputs)
 ```
 
-To launch FP32 (TF32 on NVIDIA Ampere GPUs) training on 8 GPUs, run:
+Similarly, we can build *embedding_decoder* and *decoder_emb_inp*. Note that one
+can choose to initialize embedding weights with pretrained word representations
+such as word2vec or Glove vectors. In general, given a large amount of training
+data we can learn these embeddings from scratch.
 
-```
-python nmt.py --output_dir=results --batch_size=1024 --num_gpus=8 --learning_rate=2e-3
-```
+### Encoder
 
-**6. Start evaluation.**
+Once retrieved, the word embeddings are then fed as input into the main network,
+which consists of two multi-layer RNNs – an encoder for the source language and
+a decoder for the target language. These two RNNs, in principle, can share the
+same weights; however, in practice, we often use two different RNN parameters
+(such models do a better job when fitting large training datasets). The
+*encoder* RNN uses zero vectors as its starting states and is built as follows:
 
-The training process automatically runs evaluation and outputs the BLEU score
-after each training epoch. Additionally, after the training is done, you can
-manually run inference on test dataset with the checkpoint saved during the
-training.
+``` python
+# Build RNN cell
+encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
 
-To launch mixed precision inference on 1 GPU, run:
-
-```
-python nmt.py --output_dir=results --infer_batch_size=128 --mode=infer --amp
-```
-
-To launch FP32 (TF32 on NVIDIA Ampere GPUs) inference on 1 GPU, run:
-
-```
-python nmt.py --output_dir=results --infer_batch_size=128 --mode=infer
-```
-
-**7. Start translation.**
-
-After the training is done, you can translate custom sentences with the checkpoint saved during the training.
-
-```bash
-echo "The quick brown fox jumps over the lazy dog" >file.txt
-python nmt.py --output_dir=results --mode=translate --translate-file=file.txt
-cat file.txt.trans
-```
-```
-Der schnelle braune Fuchs springt über den faulen Hund
+# Run Dynamic RNN
+#   encoder_outputs: [max_time, batch_size, num_units]
+#   encoder_state: [batch_size, num_units]
+encoder_outputs, encoder_state = tf.nn.dynamic_rnn(
+    encoder_cell, encoder_emb_inp,
+    sequence_length=source_sequence_length, time_major=True)
 ```
 
-## Advanced
+Note that sentences have different lengths to avoid wasting computation, we tell
+*dynamic_rnn* the exact source sentence lengths through
+*source_sequence_length*. Since our input is time major, we set
+*time_major=True*. Here, we build only a single layer LSTM, *encoder_cell*. We
+will describe how to build multi-layer LSTMs, add dropout, and use attention in
+a later section.
 
-The following sections provide greater details of the dataset, running training
-and inference, and the training results.
+### Decoder
 
-### Scripts and sample code
-In the root directory, the most important files are:
+The *decoder* also needs to have access to the source information, and one
+simple way to achieve that is to initialize it with the last hidden state of the
+encoder, *encoder_state*. In Figure 2, we pass the hidden state at the source
+word "student" to the decoder side.
 
-* `nmt.py`: serves as the entry point to launch the training
-* `Dockerfile`: container with the basic set of dependencies to run GNMT v2
-* `requirements.txt`: set of extra requirements for running GNMT v2
-* `attention_wrapper.py`, `gnmt_model.py`, `model.py`: model definition
-* `estimator.py`: functions for training and inference
-
-In the `script` directory, the most important files are:
-* `translate.py`: wrapped on `nmt.py` for benchmarking and running inference
-* `parse_log.py`: script for retrieving information in JSON format from the training log
-* `wmt16_en_de.sh`: script for downloading and preprocessing the dataset
-
-In the `script/docker` directory, the files are:
-* `build.sh`: script for building the GNMT container
-* `interactive.sh`: script for running the GNMT container interactively
-
-### Parameters
-
-The most useful arguments are as follows:
-
-```
-  --learning_rate LEARNING_RATE
-                        Learning rate.
-  --warmup_steps WARMUP_STEPS
-                        How many steps we inverse-decay learning.
-  --max_train_epochs MAX_TRAIN_EPOCHS
-                        Max number of epochs.
-  --target_bleu TARGET_BLEU
-                        Target bleu.
-  --data_dir DATA_DIR   Training/eval data directory.
-  --translate_file TRANSLATE_FILE
-                        File to translate, works only with translate mode
-  --output_dir OUTPUT_DIR
-                        Store log/model files.
-  --batch_size BATCH_SIZE
-                        Total batch size.
-  --log_step_count_steps LOG_STEP_COUNT_STEPS
-                        The frequency, in number of global steps, that the
-                        global step and the loss will be logged during training
-  --num_gpus NUM_GPUS   Number of gpus in each worker.
-  --random_seed RANDOM_SEED
-                        Random seed (>0, set a specific seed).
-  --ckpt CKPT           Checkpoint file to load a model for inference.
-                        (defaults to newest checkpoint)
-  --infer_batch_size INFER_BATCH_SIZE
-                        Batch size for inference mode.
-  --beam_width BEAM_WIDTH
-                        beam width when using beam search decoder. If 0, use
-                        standard decoder with greedy helper.
-  --amp                 use amp for training and inference
-  --mode {train_and_eval,infer,translate}
+``` python
+# Build RNN cell
+decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
 ```
 
-### Command-line options
-
-To see the full list of available options and their descriptions, use the `-h`
-or `--help` command line option, for example:
-
-```
-python nmt.py --help
-```
-
-
-
-### Getting the data
-
-The GNMT v2 model was trained on the
-[WMT16 English-German](http://www.statmt.org/wmt16/translation-task.html)
-dataset and newstest2014 is used as a testing dataset.
-
-This repository contains the `scripts/wmt16_en_de.sh` download script which
-automatically downloads and preprocesses the training and test datasets. By
-default, data is downloaded to the `data` directory.
-
-Our download script is very similar to the `wmt16_en_de.sh` script from the
-[tensorflow/nmt](https://github.com/tensorflow/nmt/blob/master/nmt/scripts/wmt16_en_de.sh)
-repository. Our download script contains an extra preprocessing step, which
-discards all pairs of sentences which can't be decoded by latin-1 encoder.
-The `scripts/wmt16_en_de.sh` script uses the
-[subword-nmt](https://github.com/rsennrich/subword-nmt)
-package to segment text into subword units (Byte Pair Encodings - [BPE](https://en.wikipedia.org/wiki/Byte_pair_encoding)). By default, the script builds
-the shared vocabulary of 32,000 tokens.
-
-In order to test with other datasets, the scripts need to be customized accordingly.
-
-#### Dataset guidelines
-
-The process of downloading and preprocessing the data can be found in the
-`scripts/wmt16_en_de.sh` script.
-
-Initially, data is downloaded from [www.statmt.org](www.statmt.org). Then, `europarl-v7`,
-`commoncrawl` and `news-commentary` corpora are concatenated to form the
-training dataset, similarly `newstest2015` and `newstest2016` are concatenated
-to form the validation dataset. Raw data is preprocessed with
-[Moses](https://github.com/moses-smt/mosesdecoder), first by launching [Moses
-tokenizer](https://github.com/moses-smt/mosesdecoder/blob/master/scripts/tokenizer/tokenizer.perl)
-(tokenizer breaks up text into individual words), then by launching
-[clean-corpus-n.perl](https://github.com/moses-smt/mosesdecoder/blob/master/scripts/training/clean-corpus-n.perl)
-which removes invalid sentences and does initial filtering by sequence length.
-
-Second stage of preprocessing is done by launching the
-`scripts/filter_dataset.py` script, which discards all pairs of sentences that
-can't be decoded by latin-1 encoder.
-
-Third state of preprocessing uses the
-[subword-nmt](https://github.com/rsennrich/subword-nmt) package. First it
-builds shared [byte pair
-encoding](https://en.wikipedia.org/wiki/Byte_pair_encoding) vocabulary with
-32,000 merge operations (command `subword-nmt learn-bpe`), then it applies
-generated vocabulary to training, validation and test corpora (command
-`subword-nmt apply-bpe`).
-
-
-
-### Training process
-
-The training configuration can be launched by running the `nmt.py` script.
-By default, the training script saves the checkpoint after every training epoch
-and after every 2000 training steps within each epoch.
-Results are stored in the `results` directory.
-
-The training script launches data-parallel training on multiple GPUs. We have
-tested reliance on up to 8 GPUs on a single node.
-
-After each training epoch, the script runs an evaluation and outputs a BLEU
-score on the test dataset (*newstest2014*). BLEU is computed by the
-[SacreBLEU](https://github.com/awslabs/sockeye/tree/master/sockeye_contrib/sacrebleu)
-package. Logs from the training and evaluation are saved to the `results`
-directory.
-
-The training script automatically runs testing after each training epoch. The
-results from the testing are printed to the standard output and saved to the
-log files.
-
-The summary after each training epoch is printed in the following format:
-
-```
-training time for epoch 1: 29.37 mins (2918.36 sent/sec, 139640.48 tokens/sec)
-[...]
-bleu is 20.50000
-eval time for epoch 1: 1.57 mins (78.48 sent/sec, 4283.88 tokens/sec)
-```
-The BLEU score is computed on the test dataset.
-Performance is reported in total sentences per second and in total tokens per
-second. The performance result is averaged over an entire training epoch and
-summed over all GPUs participating in the training.
-
-
-To view all available options for training, run `python nmt.py --help`.
-
-### Inference process
-
-Validation and translation can be run by launching the `nmt.py` script, although, it requires a
-pre-trained model checkpoint and tokenized input (for validation) and  non-tokenized input (for translation).
-
-#### Validation process
-
-The `nmt.py` script supports batched validation (`--mode=infer` flag). By
-default, it launches beam search with beam size of 5, coverage penalty term and
-length normalization term. Greedy decoding can be enabled by setting the
-`--beam_width=1` flag for the `nmt.py` inference script. To control the
-batch size use the `--infer_batch_size` flag.
-
-To view all available options for validation, run `python nmt.py --help`.
-
-#### Translation process
-
-The `nmt.py` script supports batched translation (`--mode=translate` flag). By
-default, it launches beam search with beam size of 5, coverage penalty term and
-length normalization term. Greedy decoding can be enabled by setting the
-`--beam_width=1` flag for the `nmt.py` prediction script. To control the
-batch size use the `--infer_batch_size` flag.
-
-The input file may contain many sentences, each on a new line. The file can be specified
-by the `--translate_file <file>` flag. This script will create a new file called `<file>.trans`,
-with translation of the input file.
-
-To view all available options for translation, run `python nmt.py --help`.
-
-
-## Performance
-
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
-
-### Benchmarking
-
-The following section shows how to run benchmarks measuring the model performance in training and inference modes.
-
-#### Training performance benchmark
-
-To benchmark training performance, run:
-
-* `python nmt.py --output_dir=results --max_train_epochs=1 --num_gpus <num GPUs> --batch_size <total batch size> --amp` for mixed precision
-* `python nmt.py --output_dir=results --max_train_epochs=1 --num_gpus <num GPUs> --batch_size <total batch size>` for FP32/TF32
-
-
-The log file will contain training performance in the following format:
-
-```
-training time for epoch 1: 25.75 mins (3625.19 sent/sec, 173461.27 tokens/sec)
+``` python
+# Helper
+helper = tf.contrib.seq2seq.TrainingHelper(
+    decoder_emb_inp, decoder_lengths, time_major=True)
+# Decoder
+decoder = tf.contrib.seq2seq.BasicDecoder(
+    decoder_cell, helper, encoder_state,
+    output_layer=projection_layer)
+# Dynamic decoding
+outputs, _ = tf.contrib.seq2seq.dynamic_decode(decoder, ...)
+logits = outputs.rnn_output
 ```
 
-#### Inference performance benchmark
+Here, the core part of this code is the *BasicDecoder* object, *decoder*, which
+receives *decoder_cell* (similar to encoder_cell), a *helper*, and the previous
+*encoder_state* as inputs. By separating out decoders and helpers, we can reuse
+different codebases, e.g., *TrainingHelper* can be substituted with
+*GreedyEmbeddingHelper* to do greedy decoding. See more
+in
+[helper.py](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/seq2seq/python/ops/helper.py).
 
-To benchmark inference performance, run the `scripts/translate.py` script:
+Lastly, we haven't mentioned *projection_layer* which is a dense matrix to turn
+the top hidden states to logit vectors of dimension V. We illustrate this
+process at the top of Figure 2.
 
-* For FP32/TF32:
-    `python scripts/translate.py --output_dir=/path/to/trained/model --beam_width <comma separated beam widths> --infer_batch_size <comma separated batch sizes>`
-
-* For mixed precision
-    `python scripts/translate.py --output_dir=/path/to/trained/model --amp --beam_width <comma separated beam widths> --infer_batch_size <comma separated batch sizes>`
-
-The benchmark requires a checkpoint from a fully trained model.
-
-### Results
-
-The following sections provide details on how we achieved our performance and
-accuracy in training and inference.
-
-
-#### Training accuracy results
-
-##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
-
-Our results were obtained by running the `examples/DGXA100_{TF32,AMP}_8GPU.sh`
-training script in the tensorflow-20.06-tf1-py3 NGC container
-on NVIDIA DGX A100 (8x A100 40GB) GPUs.
-
-| **GPUs** | **Batch size / GPU** |**Accuracy - mixed precision (BLEU)** | **Accuracy - TF32 (BLEU)** | **Time to train - mixed precision** | **Time to train - TF32** | **Time to train speedup (TF32 to mixed precision)** |
-| --- | --- | ----- | ----- | -------- | -------- | ---- |
-|  8  | 128 | 25.1 | 24.31 | 96 min  | 139 min  | 1.45 |
-
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
-
-Our results were obtained by running the `nmt.py` script in the
-tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB)  GPUs.
-
-| **GPUs** | **Batch size / GPU** |**Accuracy - mixed precision (BLEU)** | **Accuracy - FP32 (BLEU)** | **Time to train - mixed precision** | **Time to train - FP32** | **Time to train speedup (FP32 to mixed precision)** |
-| --- | --- | ----- | ----- | -------- | -------- | ---- |
-|  1  | 128 | 24.90 | 24.84 | 763 min  | 1237 min | 1.62 |
-|  8  | 128 | 24.33 | 24.34 | 168 min  | 237 min  | 1.41 |
-
-
-In the following plot, the BLEU scores after each training epoch for different
-configurations are displayed.
-
-![BLEUScore](./img/bleu_score.png)
-
-
-##### Training stability test
-
-The GNMT v2 model was trained for 6 epochs, starting from 6 different initial
-random seeds. After each training epoch, the model was evaluated on the test
-dataset and the BLEU score was recorded. The training was performed in the
-tensorflow-20.06-tf1-py3 NGC container.
-
-In the following tables, the BLEU scores after each training epoch for different
-initial random seeds are displayed.
-
-###### NVIDIA DGX A100 with 8 Ampere A100 40GB GPUs with TF32.
-
-| Epoch | Average | Standard deviation | Minimum | Median | Maximum |
-| ----- | ------- | ------------------ | ------- | ------ | ------- |
-| 1     | 20.272  | 0.165              | 19.760  | 20.295 | 20.480  |
-| 2     | 21.911  | 0.145              | 21.650  | 21.910 | 22.230  |
-| 3     | 22.731  | 0.140              | 22.490  | 22.725 | 23.020  |
-| 4     | 23.142  | 0.164              | 22.930  | 23.090 | 23.440  |
-| 5     | 23.967  | 0.137              | 23.760  | 23.940 | 24.260  |
-| 6     | 24.358  | 0.143              | 24.120  | 24.360 | 24.610  |
-
-###### NVIDIA DGX-1 with 8 Tesla V100 16GB GPUs with FP32.
-
-| Epoch | Average | Standard deviation | Minimum | Median | Maximum |
-| ----- | ------- | ------------------ | ------- | ------ | ------- |
-| 1     | 20.259  | 0.225              | 19.820  | 20.300 | 20.590  |
-| 2     | 21.954  | 0.194              | 21.540  | 21.955 | 22.370  |
-| 3     | 22.729  | 0.150              | 22.480  | 22.695 | 23.110  |
-| 4     | 23.218  | 0.210              | 22.820  | 23.225 | 23.470  |
-| 5     | 23.921  | 0.114              | 23.680  | 23.910 | 24.080  |
-| 6     | 24.381  | 0.131              | 24.160  | 24.375 | 24.590  |
-
-#### Inference accuracy results
-
-##### Inference accuracy: NVIDIA DGX-1 (8x V100 16GB)
-
-Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 8x V100 16GB GPUs.
-
-* For mixed precision: `python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2,5 --infer_batch_size 128 --amp`
-
-* For FP32: `python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2,5 --infer_batch_size 128`
-
-| **Batch size** | **Beam size** | **Mixed precision BLEU** | **FP32 BLEU** |
-|:---:|:---:|:---:|:---:|
-|128|1|23.80|23.80|
-|128|2|24.58|24.59|
-|128|5|25.10|25.09|
-
-#### Training performance results
-
-##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
-
-Our results were obtained by running the `examples/DGXA100_{TF32,AMP}_{1,8}GPU.sh`
-training script in the tensorflow-20.06-tf1-py3 NGC container
-on NVIDIA DGX A100 (8x A100 40GB) GPUs.
-Performance numbers (in items/images per second)
-were averaged over an entire training epoch.
-
-| **GPUs** | **Batch size / GPU** | **Throughput - mixed precision (tokens/s)** | **Throughput - TF32 (tokens/s)** | **Throughput speedup (TF32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - TF32** |
-| --- | --- | ------- | ------- | ---- | ---- | ---- |
-|  1  | 128 |  29 911 |  31 110 | 0.96 | 1.00 | 1.00 |
-|  8  | 128 | 181 384 | 175 292 | 1.03 | 6.06 | 5.63 |
-
-
-
-To achieve these same results, follow the steps in the
-[Quick Start Guide](#quick-start-guide).
-
-##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
-
-Our results were obtained by running the `nmt.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
-Performance numbers (in tokens per second) were averaged over an entire
-training epoch.
-
-| **GPUs** | **Batch size / GPU** | **Throughput - mixed precision (tokens/s)** | **Throughput - FP32 (tokens/s)** | **Throughput speedup (FP32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
-| --- | --- | ------- | ------ | ---- | ---- | ---- |
-|  1  | 128 | 23 011  | 14 106 | 1.63 | 1.00 | 1.00 |
-|  8  | 128 | 138 106 | 93 688 | 1.47 | 6.00 | 6.64 |
-
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
-outlined above.
-
-#### Inference performance results
-
-The benchmark requires a checkpoint from a fully trained model.
-
-To launch the inference benchmark in mixed precision on 1 GPU, run:
-
-```
-python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2,5 --infer_batch_size 1,2,4,8,32,128,512 --amp
+``` python
+projection_layer = layers_core.Dense(
+    tgt_vocab_size, use_bias=False)
 ```
 
-To launch the inference benchmark in FP32/TF32 on 1 GPU, run:
+### Loss
+
+Given the *logits* above, we are now ready to compute our training loss:
+
+``` python
+crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
+    labels=decoder_outputs, logits=logits)
+train_loss = (tf.reduce_sum(crossent * target_weights) /
+    batch_size)
+```
+
+Here, *target_weights* is a zero-one matrix of the same size as
+*decoder_outputs*. It masks padding positions outside of the target sequence
+lengths with values 0.
+
+***Important note***: It's worth pointing out that we divide the loss by
+*batch_size*, so our hyperparameters are "invariant" to batch_size. Some people
+divide the loss by (*batch_size* * *num_time_steps*), which plays down the
+errors made on short sentences. More subtly, our hyperparameters (applied to the
+former way) can't be used for the latter way. For example, if both approaches
+use SGD with a learning of 1.0, the latter approach effectively uses a much
+smaller learning rate of 1 / *num_time_steps*.
+
+### Gradient computation & optimization
+
+We have now defined the forward pass of our NMT model. Computing the
+backpropagation pass is just a matter of a few lines of code:
+
+``` python
+# Calculate and clip gradients
+params = tf.trainable_variables()
+gradients = tf.gradients(train_loss, params)
+clipped_gradients, _ = tf.clip_by_global_norm(
+    gradients, max_gradient_norm)
+```
+
+One of the important steps in training RNNs is gradient clipping. Here, we clip
+by the global norm.  The max value, *max_gradient_norm*, is often set to a value
+like 5 or 1. The last step is selecting the optimizer.  The Adam optimizer is a
+common choice.  We also select a learning rate.  The value of *learning_rate*
+can is usually in the range 0.0001 to 0.001; and can be set to decrease as
+training progresses.
+
+``` python
+# Optimization
+optimizer = tf.train.AdamOptimizer(learning_rate)
+update_step = optimizer.apply_gradients(
+    zip(clipped_gradients, params))
+```
+
+In our own experiments, we use standard SGD (tf.train.GradientDescentOptimizer)
+with a decreasing learning rate schedule, which yields better performance. See
+the [benchmarks](#benchmarks).
+
+## Hands-on – Let's train an NMT model
+
+Let's train our very first NMT model, translating from Vietnamese to English!
+The entry point of our code
+is
+[**nmt.py**](nmt.py).
+
+We will use a *small-scale parallel corpus of TED talks* (133K training
+examples) for this exercise. All data we used here can be found
+at:
+[https://nlp.stanford.edu/projects/](https://nlp.stanford.edu/projects/). We
+will use tst2012 as our dev dataset, and tst2013 as our test dataset.
+
+Run the following command to download the data for training NMT model:\
+	`scripts/download_iwslt15.sh /tmp/nmt_data`
+
+Run the following command to start the training:
+
+``` shell
+mkdir /tmp/nmt_model
+python -m nmt.nmt \
+    --src=vi --tgt=en \
+    --vocab_prefix=/tmp/nmt_data/vocab  \
+    --train_prefix=/tmp/nmt_data/train \
+    --dev_prefix=/tmp/nmt_data/tst2012  \
+    --test_prefix=/tmp/nmt_data/tst2013 \
+    --out_dir=/tmp/nmt_model \
+    --num_train_steps=12000 \
+    --steps_per_stats=100 \
+    --num_layers=2 \
+    --num_units=128 \
+    --dropout=0.2 \
+    --metrics=bleu
+```
+
+The above command trains a 2-layer LSTM seq2seq model with 128-dim hidden units
+and embeddings for 12 epochs. We use a dropout value of 0.2 (keep probability
+0.8). If no error, we should see logs similar to the below with decreasing
+perplexity values as we train.
 
 ```
-python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2,5 --infer_batch_size 1,2,4,8,32,128,512
+# First evaluation, global step 0
+  eval dev: perplexity 17193.66
+  eval test: perplexity 17193.27
+# Start epoch 0, step 0, lr 1, Tue Apr 25 23:17:41 2017
+  sample train data:
+    src_reverse: </s> </s> Điều đó , dĩ nhiên , là câu chuyện trích ra từ học thuyết của Karl Marx .
+    ref: That , of course , was the <unk> distilled from the theories of Karl Marx . </s> </s> </s>
+  epoch 0 step 100 lr 1 step-time 0.89s wps 5.78K ppl 1568.62 bleu 0.00
+  epoch 0 step 200 lr 1 step-time 0.94s wps 5.91K ppl 524.11 bleu 0.00
+  epoch 0 step 300 lr 1 step-time 0.96s wps 5.80K ppl 340.05 bleu 0.00
+  epoch 0 step 400 lr 1 step-time 1.02s wps 6.06K ppl 277.61 bleu 0.00
+  epoch 0 step 500 lr 1 step-time 0.95s wps 5.89K ppl 205.85 bleu 0.00
 ```
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
-outlined above.
+See [**train.py**](train.py) for more details.
 
-##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+We can start Tensorboard to view the summary of the model during training:
 
-Our results were obtained by running the
-`python scripts/translate.py --infer_batch_size 1,2,4,8,32,128,512 --beam_width 1,2,5 {--amp}`
-inferencing benchmarking script in the tensorflow-20.06-tf1-py3 NGC container
-on NVIDIA DGX A100 (1x A100 40GB) GPU.
+``` shell
+tensorboard --port 22222 --logdir /tmp/nmt_model/
+```
 
-FP16
+Training the reverse direction from English and Vietnamese can be done simply by changing:\
+	`--src=en --tgt=vi`
 
-| **Batch size**     | **Beam width**     | **Bleu**           | **Sentences/sec**  | **Tokens/sec**     | **Latency Avg**    | **Latency 50%**     | **Latency 90%**     | **Latency 95%**     | **Latency 99%**     | **Latency 100%**    |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1              | 1              | 23.80          | 13.67          | 737.89         | 73.15          | 67.69          | 121.98         | 137.20         | 162.74         | 201.06         |
-| 1              | 2              | 24.58          | 13.40          | 721.18         | 74.65          | 69.12          | 123.99         | 138.82         | 169.58         | 198.49         |
-| 1              | 5              | 25.10          | 12.12          | 647.78         | 82.53          | 76.53          | 136.35         | 152.59         | 196.09         | 216.55         |
-| 2              | 1              | 23.80          | 21.55          | 1163.16        | 92.82          | 88.15          | 139.88         | 152.49         | 185.18         | 208.35         |
-| 2              | 2              | 24.58          | 21.07          | 1134.42        | 94.91          | 89.62          | 142.08         | 158.12         | 188.00         | 205.08         |
-| 2              | 5              | 25.10          | 19.59          | 1047.21        | 102.10         | 96.20          | 152.36         | 172.46         | 211.96         | 219.87         |
-| 4              | 1              | 23.80          | 36.98          | 1996.27        | 108.16         | 105.07         | 150.42         | 161.56         | 200.99         | 205.87         |
-| 4              | 2              | 24.57          | 34.92          | 1880.48        | 114.53         | 111.42         | 160.29         | 177.14         | 205.32         | 211.80         |
-| 4              | 5              | 25.10          | 31.56          | 1687.34        | 126.74         | 122.06         | 179.68         | 201.38         | 225.08         | 229.14         |
-| 8              | 1              | 23.80          | 64.52          | 3482.81        | 123.99         | 122.89         | 159.89         | 174.66         | 201.12         | 205.59         |
-| 8              | 2              | 24.57          | 59.04          | 3178.17        | 135.50         | 135.23         | 180.50         | 191.66         | 214.95         | 216.84         |
-| 8              | 5              | 25.09          | 55.51          | 2967.82        | 144.11         | 141.98         | 198.39         | 218.88         | 223.55         | 225.61         |
-| 32             | 1              | 23.80          | 193.54         | 10447.04       | 165.34         | 163.56         | 211.67         | 215.37         | 221.07         | 221.14         |
-| 32             | 2              | 24.57          | 182.00         | 9798.09        | 175.82         | 176.04         | 220.33         | 224.25         | 226.45         | 227.05         |
-| 32             | 5              | 25.10          | 141.63         | 7572.02        | 225.94         | 225.59         | 278.38         | 279.56         | 281.61         | 282.13         |
-| 128            | 1              | 23.80          | 556.57         | 30042.59       | 229.98         | 226.81         | 259.05         | 260.26         | 260.74         | 260.85         |
-| 128            | 2              | 24.57          | 400.02         | 21535.38       | 319.98         | 328.23         | 351.31         | 352.82         | 353.01         | 353.06         |
-| 128            | 5              | 25.10          | 235.14         | 12570.95       | 544.35         | 576.62         | 581.95         | 582.64         | 583.61         | 583.85         |
-| 512            | 1              | 23.80          | 903.83         | 48786.58       | 566.48         | 570.44         | 579.74         | 580.66         | 581.39         | 581.57         |
-| 512            | 2              | 24.58          | 588.63         | 31689.07       | 869.81         | 894.90         | 902.65         | 902.85         | 903.00         | 903.04         |
-| 512            | 5              | 25.10          | 285.86         | 15283.40       | 1791.06        | 1835.19        | 1844.29        | 1845.59        | 1846.63        | 1846.89        |
+## Inference – How to generate translations
 
-TF32
+While you're training your NMT models (and once you have trained models), you
+can obtain translations given previously unseen source sentences. This process
+is called inference. There is a clear distinction between training and inference
+(*testing*): at inference time, we only have access to the source sentence,
+i.e., *encoder_inputs*. There are many ways to perform decoding.  Decoding
+methods include greedy, sampling, and beam-search decoding. Here, we will
+discuss the greedy decoding strategy.
 
-| **Batch size**     | **Beam width**     | **Bleu**           | **Sentences/sec**  | **Tokens/sec**     | **Latency Avg**    | **Latency 50%**     | **Latency 90%**     | **Latency 95%**     | **Latency 99%**     | **Latency 100%**    |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1              | 1              | 23.82          | 13.25          | 715.47         | 75.45          | 69.81          | 125.63         | 141.89         | 169.70         | 209.78         |
-| 1              | 2              | 24.59          | 13.21          | 711.16         | 75.72          | 70.06          | 124.75         | 140.20         | 173.23         | 201.39         |
-| 1              | 5              | 25.08          | 12.38          | 661.99         | 80.76          | 74.90          | 131.93         | 148.91         | 187.05         | 208.39         |
-| 2              | 1              | 23.82          | 21.61          | 1166.56        | 92.55          | 87.25          | 139.54         | 151.77         | 180.24         | 209.05         |
-| 2              | 2              | 24.59          | 21.24          | 1143.63        | 94.17          | 88.78          | 139.70         | 156.61         | 189.09         | 205.06         |
-| 2              | 5              | 25.10          | 19.49          | 1042.17        | 102.62         | 96.14          | 153.38         | 172.89         | 213.99         | 219.54         |
-| 4              | 1              | 23.81          | 35.84          | 1934.49        | 111.62         | 108.73         | 154.52         | 165.42         | 207.88         | 211.29         |
-| 4              | 2              | 24.58          | 34.71          | 1869.20        | 115.24         | 111.24         | 161.24         | 177.73         | 208.12         | 212.74         |
-| 4              | 5              | 25.09          | 32.24          | 1723.86        | 124.07         | 119.35         | 177.54         | 196.69         | 221.10         | 223.52         |
-| 8              | 1              | 23.80          | 64.08          | 3459.74        | 124.84         | 123.61         | 161.92         | 177.06         | 205.47         | 206.47         |
-| 8              | 2              | 24.61          | 59.31          | 3193.52        | 134.89         | 133.44         | 182.92         | 192.71         | 216.04         | 218.78         |
-| 8              | 5              | 25.10          | 56.60          | 3026.29        | 141.35         | 138.61         | 194.52         | 213.65         | 220.24         | 221.45         |
-| 32             | 1              | 23.80          | 195.31         | 10544.22       | 163.85         | 162.80         | 212.71         | 215.41         | 216.92         | 217.34         |
-| 32             | 2              | 24.61          | 185.66         | 9996.59        | 172.36         | 171.07         | 216.46         | 221.64         | 223.68         | 225.25         |
-| 32             | 5              | 25.11          | 147.24         | 7872.61        | 217.34         | 214.97         | 269.75         | 270.71         | 271.44         | 272.87         |
-| 128            | 1              | 23.81          | 576.54         | 31123.19       | 222.02         | 219.25         | 249.44         | 249.75         | 249.88         | 249.91         |
-| 128            | 2              | 24.57          | 419.87         | 22609.82       | 304.86         | 314.47         | 332.18         | 334.13         | 336.22         | 336.74         |
-| 128            | 5              | 25.10          | 245.76         | 13138.84       | 520.83         | 552.68         | 558.89         | 559.09         | 559.13         | 559.13         |
-| 512            | 1              | 23.80          | 966.24         | 52156.34       | 529.89         | 534.82         | 558.30         | 559.33         | 560.16         | 560.36         |
-| 512            | 2              | 24.58          | 642.41         | 34590.81       | 797.00         | 812.40         | 824.23         | 825.92         | 827.27         | 827.61         |
-| 512            | 5              | 25.10          | 289.33         | 15468.09       | 1769.61        | 1817.19        | 1849.83        | 1855.17        | 1859.45        | 1860.51        |
+The idea is simple and we illustrate it in Figure 3:
 
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+1. We still encode the source sentence in the same way as during training to
+   obtain an *encoder_state*, and this *encoder_state* is used to initialize the
+   decoder.
+2. The decoding (translation) process is started as soon as the decoder receives
+   a starting symbol "\<s\>" (refer as *tgt_sos_id* in our code);
+3. For each timestep on the decoder side, we treat the RNN's output as a set of
+   logits.  We choose the most likely word, the id associated with the maximum
+   logit value, as the emitted word (this is the "greedy" behavior).  For
+   example in Figure 3, the word "moi" has the highest translation probability
+   in the first decoding step.  We then feed this word as input to the next
+   timestep.
+4. The process continues until the end-of-sentence marker "\</s\>" is produced as
+   an output symbol (refer as *tgt_eos_id* in our code).
 
-##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+<p align="center">
+<img width="40%" src="g3doc/img/greedy_dec.jpg" />
+<br>
+Figure 3. <b>Greedy decoding</b> – example of how a trained NMT model produces a
+translation for a source sentence "Je suis étudiant" using greedy search.
+</p>
 
-Our results were obtained by running the
-`python scripts/translate.py --infer_batch_size 1,2,4,8,32,128,512 --beam_width 1,2,5 {--amp}`
-inferencing benchmarking script in the tensorflow-20.06-tf1-py3 NGC container
-on NVIDIA DGX-1 with (1x V100 16GB) GPU.
+Step 3 is what makes inference different from training. Instead of always
+feeding the correct target words as an input, inference uses words predicted by
+the model. Here's the code to achieve greedy decoding.  It is very similar to
+the training decoder.
 
-FP16
+``` python
+# Helper
+helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+    embedding_decoder,
+    tf.fill([batch_size], tgt_sos_id), tgt_eos_id)
 
-| **Batch size** | **Sequence length** | **Throughput Avg** | **Latency Avg** | **Latency 90%** |**Latency 95%** |**Latency 99%** |
-|------------|-----------------|-----|-----|-----|-----|-----|
-| 1              | 1              | 23.78          | 9.06           | 489.00         | 110.41         | 102.80         | 183.54         | 206.33         | 242.44         | 306.21         |
-| 1              | 2              | 24.58          | 8.68           | 467.35         | 115.22         | 107.17         | 188.75         | 212.36         | 258.15         | 306.15         |
-| 1              | 5              | 25.09          | 8.39           | 448.32         | 119.25         | 109.79         | 195.68         | 220.56         | 276.41         | 325.65         |
-| 2              | 1              | 23.82          | 14.59          | 787.70         | 137.04         | 129.38         | 206.35         | 224.94         | 267.30         | 318.60         |
-| 2              | 2              | 24.57          | 14.44          | 777.60         | 138.51         | 131.07         | 206.67         | 228.95         | 275.56         | 311.23         |
-| 2              | 5              | 25.11          | 13.78          | 736.99         | 145.11         | 136.76         | 216.01         | 243.24         | 299.28         | 315.88         |
-| 4              | 1              | 23.82          | 23.79          | 1284.24        | 168.14         | 164.13         | 234.70         | 248.42         | 308.38         | 325.46         |
-| 4              | 2              | 24.59          | 22.67          | 1220.66        | 176.45         | 171.40         | 243.76         | 271.92         | 314.79         | 330.19         |
-| 4              | 5              | 25.08          | 22.33          | 1194.00        | 179.12         | 174.04         | 253.36         | 281.88         | 318.76         | 340.01         |
-| 8              | 1              | 23.81          | 43.33          | 2338.68        | 184.63         | 183.25         | 237.66         | 266.73         | 305.89         | 315.03         |
-| 8              | 2              | 24.60          | 39.12          | 2106.44        | 204.49         | 200.96         | 276.05         | 294.53         | 327.61         | 335.50         |
-| 8              | 5              | 25.10          | 37.16          | 1987.05        | 215.26         | 210.92         | 295.65         | 323.83         | 337.09         | 343.03         |
-| 32             | 1              | 23.82          | 129.52         | 6992.15        | 247.06         | 245.81         | 317.71         | 325.54         | 330.09         | 335.04         |
-| 32             | 2              | 24.55          | 123.28         | 6637.86        | 259.57         | 261.07         | 319.13         | 333.45         | 338.75         | 342.57         |
-| 32             | 5              | 25.05          | 88.74          | 4744.33        | 360.61         | 359.27         | 446.65         | 448.40         | 455.93         | 461.86         |
-| 128            | 1              | 23.80          | 332.81         | 17964.83       | 384.60         | 382.14         | 434.46         | 436.71         | 439.64         | 440.37         |
-| 128            | 2              | 24.59          | 262.87         | 14153.59       | 486.93         | 506.45         | 528.87         | 530.90         | 533.09         | 533.64         |
-| 128            | 5              | 25.08          | 143.91         | 7695.36        | 889.42         | 932.93         | 965.67         | 966.26         | 966.53         | 966.59         |
-| 512            | 1              | 23.80          | 613.57         | 33126.42       | 834.46         | 848.06         | 868.21         | 869.04         | 869.70         | 869.86         |
-| 512            | 2              | 24.59          | 387.72         | 20879.62       | 1320.54        | 1343.05        | 1354.40        | 1356.50        | 1358.19        | 1358.61        |
-| 512            | 5              | 25.10          | 199.48         | 10664.34       | 2566.67        | 2628.50        | 2642.59        | 2644.73        | 2646.44        | 2646.86        |
+# Decoder
+decoder = tf.contrib.seq2seq.BasicDecoder(
+    decoder_cell, helper, encoder_state,
+    output_layer=projection_layer)
+# Dynamic decoding
+outputs, _ = tf.contrib.seq2seq.dynamic_decode(
+    decoder, maximum_iterations=maximum_iterations)
+translations = outputs.sample_id
+```
+
+Here, we use *GreedyEmbeddingHelper* instead of *TrainingHelper*. Since we do
+not know the target sequence lengths in advance, we use *maximum_iterations* to
+limit the translation lengths. One heuristic is to decode up to two times the
+source sentence lengths.
+
+``` python
+maximum_iterations = tf.round(tf.reduce_max(source_sequence_length) * 2)
+```
+
+Having trained a model, we can now create an inference file and translate some
+sentences:
+
+``` shell
+cat > /tmp/my_infer_file.vi
+# (copy and paste some sentences from /tmp/nmt_data/tst2013.vi)
+
+python -m nmt.nmt \
+    --out_dir=/tmp/nmt_model \
+    --inference_input_file=/tmp/my_infer_file.vi \
+    --inference_output_file=/tmp/nmt_model/output_infer
+
+cat /tmp/nmt_model/output_infer # To view the inference as output
+```
+
+Note the above commands can also be run while the model is still being trained
+as long as there exists a training
+checkpoint. See [**inference.py**](inference.py) for more details.
+
+# Intermediate
+
+Having gone through the most basic seq2seq model, let's get more advanced! To
+build state-of-the-art neural machine translation systems, we will need more
+"secret sauce": the *attention mechanism*, which was first introduced
+by [Bahdanau et al., 2015](https://arxiv.org/abs/1409.0473), then later refined
+by [Luong et al., 2015](https://arxiv.org/abs/1508.04025) and others. The key
+idea of the attention mechanism is to establish direct short-cut connections
+between the target and the source by paying "attention" to relevant source
+content as we translate. A nice byproduct of the attention mechanism is an
+easy-to-visualize alignment matrix between the source and target sentences (as
+shown in Figure 4).
+
+<p align="center">
+<img width="40%" src="g3doc/img/attention_vis.jpg" />
+<br>
+Figure 4. <b>Attention visualization</b> – example of the alignments between source
+and target sentences. Image is taken from (Bahdanau et al., 2015).
+</p>
+
+Remember that in the vanilla seq2seq model, we pass the last source state from
+the encoder to the decoder when starting the decoding process. This works well
+for short and medium-length sentences; however, for long sentences, the single
+fixed-size hidden state becomes an information bottleneck. Instead of discarding
+all of the hidden states computed in the source RNN, the attention mechanism
+provides an approach that allows the decoder to peek at them (treating them as a
+dynamic memory of the source information). By doing so, the attention mechanism
+improves the translation of longer sentences. Nowadays, attention mechanisms are
+the defacto standard and have been successfully applied to many other tasks
+(including image caption generation, speech recognition, and text
+summarization).
+
+## Background on the Attention Mechanism
+
+We now describe an instance of the attention mechanism proposed in (Luong et
+al., 2015), which has been used in several state-of-the-art systems including
+open-source toolkits such as [OpenNMT](http://opennmt.net/about/) and in the TF
+seq2seq API in this tutorial. We will also provide connections to other variants
+of the attention mechanism.
+
+<p align="center">
+<img width="48%" src="g3doc/img/attention_mechanism.jpg" />
+<br>
+Figure 5. <b>Attention mechanism</b> – example of an attention-based NMT system
+as described in (Luong et al., 2015) . We highlight in detail the first step of
+the attention computation. For clarity, we don't show the embedding and
+projection layers in Figure (2).
+</p>
+
+As illustrated in Figure 5, the attention computation happens at every decoder
+time step.  It consists of the following stages:
+
+1. The current target hidden state is compared with all source states to derive
+   *attention weights* (can be visualized as in Figure 4).
+1. Based on the attention weights we compute a *context vector* as the weighted
+   average of the source states.
+1. Combine the context vector with the current target hidden state to yield the
+   final *attention vector*
+1. The attention vector is fed as an input to the next time step (*input
+   feeding*).  The first three steps can be summarized by the equations below:
+
+<p align="center">
+<img width="80%" src="g3doc/img/attention_equation_0.jpg" />
+<br>
+</p>
+
+Here, the function `score` is used to compared the target hidden state $$h_t$$
+with each of the source hidden states $$\overline{h}_s$$, and the result is normalized to
+produced attention weights (a distribution over source positions). There are
+various choices of the scoring function; popular scoring functions include the
+multiplicative and additive forms given in Eq. (4). Once computed, the attention
+vector $$a_t$$ is used to derive the softmax logit and loss.  This is similar to the
+target hidden state at the top layer of a vanilla seq2seq model. The function
+`f` can also take other forms.
+
+<p align="center">
+<img width="80%" src="g3doc/img/attention_equation_1.jpg" />
+<br>
+</p>
+
+Various implementations of attention mechanisms can be found
+in
+[attention_wrapper.py](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/seq2seq/python/ops/attention_wrapper.py).
+
+***What matters in the attention mechanism?***
+
+As hinted in the above equations, there are many different attention variants.
+These variants depend on the form of the scoring function and the attention
+function, and on whether the previous state $$h_{t-1}$$ is used instead of
+$$h_t$$ in the scoring function as originally suggested in (Bahdanau et al.,
+2015). Empirically, we found that only certain choices matter. First, the basic
+form of attention, i.e., direct connections between target and source, needs to
+be present. Second, it's important to feed the attention vector to the next
+timestep to inform the network about past attention decisions as demonstrated in
+(Luong et al., 2015). Lastly, choices of the scoring function can often result
+in different performance. See more in the [benchmark results](#benchmarks)
+section.
+
+## Attention Wrapper API
+
+In our implementation of
+the
+[AttentionWrapper](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/seq2seq/python/ops/attention_wrapper.py),
+we borrow some terminology
+from [(Weston et al., 2015)](https://arxiv.org/abs/1410.3916) in their work on
+*memory networks*. Instead of having readable & writable memory, the attention
+mechanism presented in this tutorial is a *read-only* memory. Specifically, the
+set of source hidden states (or their transformed versions, e.g.,
+$$W\overline{h}_s$$ in Luong's scoring style or $$W_2\overline{h}_s$$ in
+Bahdanau's scoring style) is referred to as the *"memory"*. At each time step,
+we use the current target hidden state as a *"query"* to decide on which parts
+of the memory to read.  Usually, the query needs to be compared with keys
+corresponding to individual memory slots. In the above presentation of the
+attention mechanism, we happen to use the set of source hidden states (or their
+transformed versions, e.g., $$W_1h_t$$ in Bahdanau's scoring style) as
+"keys". One can be inspired by this memory-network terminology to derive other
+forms of attention!
+
+Thanks to the attention wrapper, extending our vanilla seq2seq code with
+attention is trivial. This part refers to
+file [**attention_model.py**](attention_model.py)
+
+First, we need to define an attention mechanism, e.g., from (Luong et al.,
+2015):
+
+``` python
+# attention_states: [batch_size, max_time, num_units]
+attention_states = tf.transpose(encoder_outputs, [1, 0, 2])
+
+# Create an attention mechanism
+attention_mechanism = tf.contrib.seq2seq.LuongAttention(
+    num_units, attention_states,
+    memory_sequence_length=source_sequence_length)
+```
+
+In the previous [Encoder](#encoder) section, *encoder_outputs* is the set of all
+source hidden states at the top layer and has the shape of *[max_time,
+batch_size, num_units]* (since we use *dynamic_rnn* with *time_major* set to
+*True* for efficiency). For the attention mechanism, we need to make sure the
+"memory" passed in is batch major, so we need to transpose
+*attention_states*. We pass *source_sequence_length* to the attention mechanism
+to ensure that the attention weights are properly normalized (over non-padding
+positions only).
+
+Having defined an attention mechanism, we use *AttentionWrapper* to wrap the
+decoding cell:
+
+``` python
+decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
+    decoder_cell, attention_mechanism,
+    attention_layer_size=num_units)
+```
+
+The rest of the code is almost the same as in the Section [Decoder](#decoder)!
+
+## Hands-on – building an attention-based NMT model
+
+To enable attention, we need to use one of `luong`, `scaled_luong`, `bahdanau`
+or `normed_bahdanau` as the value of the `attention` flag during training. The
+flag specifies which attention mechanism we are going to use. In addition, we
+need to create a new directory for the attention model, so we don't reuse the
+previously trained basic NMT model.
+
+Run the following command to start the training:
+
+``` shell
+mkdir /tmp/nmt_attention_model
+
+python -m nmt.nmt \
+    --attention=scaled_luong \
+    --src=vi --tgt=en \
+    --vocab_prefix=/tmp/nmt_data/vocab  \
+    --train_prefix=/tmp/nmt_data/train \
+    --dev_prefix=/tmp/nmt_data/tst2012  \
+    --test_prefix=/tmp/nmt_data/tst2013 \
+    --out_dir=/tmp/nmt_attention_model \
+    --num_train_steps=12000 \
+    --steps_per_stats=100 \
+    --num_layers=2 \
+    --num_units=128 \
+    --dropout=0.2 \
+    --metrics=bleu
+```
+
+After training, we can use the same inference command with the new out_dir for
+inference:
+
+``` shell
+python -m nmt.nmt \
+    --out_dir=/tmp/nmt_attention_model \
+    --inference_input_file=/tmp/my_infer_file.vi \
+    --inference_output_file=/tmp/nmt_attention_model/output_infer
+```
+
+# Tips & Tricks
+
+## Building Training, Eval, and Inference Graphs
+
+When building a machine learning model in TensorFlow, it's often best to build
+three separate graphs:
+
+-  The Training graph, which:
+    -  Batches, buckets, and possibly subsamples input data from a set of
+       files/external inputs.
+    -  Includes the forward and backprop ops.
+    -  Constructs the optimizer, and adds the training op.
+
+-  The Eval graph, which:
+    -  Batches and buckets input data from a set of files/external inputs.
+    -  Includes the training forward ops, and additional evaluation ops that
+       aren't used for training.
+
+-  The Inference graph, which:
+    -  May not batch input data.
+    -  Does not subsample or bucket input data.
+    -  Reads input data from placeholders (data can be fed directly to the graph
+       via *feed_dict* or from a C++ TensorFlow serving binary).
+    -  Includes a subset of the model forward ops, and possibly additional
+       special inputs/outputs for storing state between session.run calls.
+
+Building separate graphs has several benefits:
+
+-  The inference graph is usually very different from the other two, so it makes
+   sense to build it separately.
+-  The eval graph becomes simpler since it no longer has all the additional
+   backprop ops.
+-  Data feeding can be implemented separately for each graph.
+-  Variable reuse is much simpler.  For example, in the eval graph there's no
+   need to reopen variable scopes with *reuse=True* just because the Training
+   model created these variables already.  So the same code can be reused
+   without sprinkling *reuse=* arguments everywhere.
+-  In distributed training, it is commonplace to have separate workers perform
+   training, eval, and inference.  These need to build their own graphs anyway.
+   So building the system this way prepares you for distributed training.
+
+The primary source of complexity becomes how to share Variables across the three
+graphs in a single machine setting. This is solved by using a separate session
+for each graph. The training session periodically saves checkpoints, and the
+eval session and the infer session restore parameters from checkpoints. The
+example below shows the main differences between the two approaches.
+
+**Before: Three models in a single graph and sharing a single Session**
+
+``` python
+with tf.variable_scope('root'):
+  train_inputs = tf.placeholder()
+  train_op, loss = BuildTrainModel(train_inputs)
+  initializer = tf.global_variables_initializer()
+
+with tf.variable_scope('root', reuse=True):
+  eval_inputs = tf.placeholder()
+  eval_loss = BuildEvalModel(eval_inputs)
+
+with tf.variable_scope('root', reuse=True):
+  infer_inputs = tf.placeholder()
+  inference_output = BuildInferenceModel(infer_inputs)
+
+sess = tf.Session()
+
+sess.run(initializer)
+
+for i in itertools.count():
+  train_input_data = ...
+  sess.run([loss, train_op], feed_dict={train_inputs: train_input_data})
+
+  if i % EVAL_STEPS == 0:
+    while data_to_eval:
+      eval_input_data = ...
+      sess.run([eval_loss], feed_dict={eval_inputs: eval_input_data})
+
+  if i % INFER_STEPS == 0:
+    sess.run(inference_output, feed_dict={infer_inputs: infer_input_data})
+```
+
+**After: Three models in three graphs, with three Sessions sharing the same Variables**
+
+``` python
+train_graph = tf.Graph()
+eval_graph = tf.Graph()
+infer_graph = tf.Graph()
+
+with train_graph.as_default():
+  train_iterator = ...
+  train_model = BuildTrainModel(train_iterator)
+  initializer = tf.global_variables_initializer()
+
+with eval_graph.as_default():
+  eval_iterator = ...
+  eval_model = BuildEvalModel(eval_iterator)
+
+with infer_graph.as_default():
+  infer_iterator, infer_inputs = ...
+  infer_model = BuildInferenceModel(infer_iterator)
+
+checkpoints_path = "/tmp/model/checkpoints"
+
+train_sess = tf.Session(graph=train_graph)
+eval_sess = tf.Session(graph=eval_graph)
+infer_sess = tf.Session(graph=infer_graph)
+
+train_sess.run(initializer)
+train_sess.run(train_iterator.initializer)
+
+for i in itertools.count():
+
+  train_model.train(train_sess)
+
+  if i % EVAL_STEPS == 0:
+    checkpoint_path = train_model.saver.save(train_sess, checkpoints_path, global_step=i)
+    eval_model.saver.restore(eval_sess, checkpoint_path)
+    eval_sess.run(eval_iterator.initializer)
+    while data_to_eval:
+      eval_model.eval(eval_sess)
+
+  if i % INFER_STEPS == 0:
+    checkpoint_path = train_model.saver.save(train_sess, checkpoints_path, global_step=i)
+    infer_model.saver.restore(infer_sess, checkpoint_path)
+    infer_sess.run(infer_iterator.initializer, feed_dict={infer_inputs: infer_input_data})
+    while data_to_infer:
+      infer_model.infer(infer_sess)
+```
+
+Notice how the latter approach is "ready" to be converted to a distributed
+version.
+
+One other difference in the new approach is that instead of using *feed_dicts*
+to feed data at each *session.run* call (and thereby performing our own
+batching, bucketing, and manipulating of data), we use stateful iterator
+objects.  These iterators make the input pipeline much easier in both the
+single-machine and distributed setting. We will cover the new input data
+pipeline (as introduced in TensorFlow 1.2) in the next section.
+
+## Data Input Pipeline
+
+Prior to TensorFlow 1.2, users had two options for feeding data to the
+TensorFlow training and eval pipelines:
+
+1. Feed data directly via *feed_dict* at each training *session.run* call.
+1. Use the queueing mechanisms in *tf.train* (e.g. *tf.train.batch*) and
+   *tf.contrib.train*.
+1. Use helpers from a higher level framework like *tf.contrib.learn* or
+   *tf.contrib.slim* (which effectively use #2).
+
+The first approach is easier for users who aren't familiar with TensorFlow or
+need to do exotic input modification (i.e., their own minibatch queueing) that
+can only be done in Python.  The second and third approaches are more standard
+but a little less flexible; they also require starting multiple python threads
+(queue runners).  Furthermore, if used incorrectly queues can lead to deadlocks
+or opaque error messages.  Nevertheless, queues are significantly more efficient
+than using *feed_dict* and are the standard for both single-machine and
+distributed training.
+
+Starting in TensorFlow 1.2, there is a new system available for reading data
+into TensorFlow models: dataset iterators, as found in the **tf.data**
+module. Data iterators are flexible, easy to reason about and to manipulate, and
+provide efficiency and multithreading by leveraging the TensorFlow C++ runtime.
+
+A **dataset** can be created from a batch data Tensor, a filename, or a Tensor
+containing multiple filenames.  Some examples:
+
+``` python
+# Training dataset consists of multiple files.
+train_dataset = tf.data.TextLineDataset(train_files)
+
+# Evaluation dataset uses a single file, but we may
+# point to a different file for each evaluation round.
+eval_file = tf.placeholder(tf.string, shape=())
+eval_dataset = tf.data.TextLineDataset(eval_file)
+
+# For inference, feed input data to the dataset directly via feed_dict.
+infer_batch = tf.placeholder(tf.string, shape=(num_infer_examples,))
+infer_dataset = tf.data.Dataset.from_tensor_slices(infer_batch)
+```
+
+All datasets can be treated similarly via input processing.  This includes
+reading and cleaning the data, bucketing (in the case of training and eval),
+filtering, and batching.
+
+To convert each sentence into vectors of word strings, for example, we use the
+dataset map transformation:
+
+``` python
+dataset = dataset.map(lambda string: tf.string_split([string]).values)
+```
+
+We can then switch each sentence vector into a tuple containing both the vector
+and its dynamic length:
+
+``` python
+dataset = dataset.map(lambda words: (words, tf.size(words))
+```
+
+Finally, we can perform a vocabulary lookup on each sentence.  Given a lookup
+table object table, this map converts the first tuple elements from a vector of
+strings to a vector of integers.
 
 
-FP32
+``` python
+dataset = dataset.map(lambda words, size: (table.lookup(words), size))
+```
 
-| **Batch size** | **Sequence length** | **Throughput Avg** | **Latency Avg** | **Latency 90%** |**Latency 95%** |**Latency 99%** |
-|------------|-----------------|-----|-----|-----|-----|-----|
-| 1              | 1              | 23.80          | 8.37           | 451.86         | 119.46         | 111.26         | 199.36         | 224.49         | 269.03         | 330.72         |
-| 1              | 2              | 24.59          | 8.83           | 475.11         | 113.31         | 104.54         | 187.79         | 210.64         | 260.42         | 317.45         |
-| 1              | 5              | 25.09          | 7.74           | 413.92         | 129.15         | 119.44         | 212.84         | 239.52         | 305.47         | 349.09         |
-| 2              | 1              | 23.80          | 13.96          | 753.79         | 143.22         | 135.73         | 213.96         | 235.89         | 284.62         | 330.71         |
-| 2              | 2              | 24.59          | 12.96          | 697.63         | 154.33         | 145.01         | 230.88         | 255.31         | 306.71         | 340.36         |
-| 2              | 5              | 25.09          | 12.67          | 677.23         | 157.88         | 148.24         | 236.50         | 266.91         | 322.94         | 349.55         |
-| 4              | 1              | 23.80          | 22.42          | 1209.97        | 178.44         | 172.70         | 247.51         | 266.07         | 326.95         | 343.86         |
-| 4              | 2              | 24.59          | 20.55          | 1106.07        | 194.68         | 188.83         | 271.75         | 295.08         | 345.76         | 364.00         |
-| 4              | 5              | 25.09          | 21.19          | 1132.58        | 188.81         | 182.77         | 268.18         | 298.53         | 331.96         | 357.36         |
-| 8              | 1              | 23.80          | 39.32          | 2122.26        | 203.48         | 201.89         | 263.28         | 286.71         | 332.70         | 348.93         |
-| 8              | 2              | 24.59          | 37.51          | 2019.43        | 213.26         | 211.55         | 283.67         | 302.28         | 338.47         | 356.51         |
-| 8              | 5              | 25.09          | 31.69          | 1694.02        | 252.46         | 245.33         | 348.95         | 378.16         | 392.72         | 401.73         |
-| 32             | 1              | 23.80          | 118.51         | 6396.93        | 270.02         | 269.22         | 337.17         | 352.12         | 361.36         | 361.40         |
-| 32             | 2              | 24.59          | 100.23         | 5395.33        | 319.28         | 318.89         | 399.80         | 403.12         | 414.51         | 423.41         |
-| 32             | 5              | 25.09          | 68.59          | 3666.77        | 466.55         | 466.84         | 581.77         | 586.42         | 589.04         | 593.41         |
-| 128            | 1              | 23.80          | 256.49         | 13845.09       | 499.04         | 492.36         | 562.12         | 567.20         | 571.18         | 572.18         |
-| 128            | 2              | 24.59          | 176.83         | 9519.12        | 723.86         | 754.89         | 792.12         | 793.86         | 796.44         | 797.09         |
-| 128            | 5              | 25.09          | 96.21          | 5143.17        | 1330.48        | 1420.94        | 1427.91        | 1431.02        | 1435.23        | 1436.28        |
-| 512            | 1              | 23.80          | 366.07         | 19759.97       | 1398.63        | 1421.81        | 1457.81        | 1461.04        | 1463.63        | 1464.27        |
-| 512            | 2              | 24.59          | 225.48         | 12137.77       | 2270.75        | 2323.62        | 2338.62        | 2340.94        | 2342.80        | 2343.27        |
-| 512            | 5              | 25.09          | 106.02         | 5667.78        | 4829.31        | 4946.65        | 4956.15        | 4957.85        | 4959.21        | 4959.55        |
+Joining two datasets is also easy.  If two files contain line-by-line
+translations of each other and each one is read into its own dataset, then a new
+dataset containing the tuples of the zipped lines can be created via:
 
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+``` python
+source_target_dataset = tf.data.Dataset.zip((source_dataset, target_dataset))
+```
 
-##### Inference performance: NVIDIA T4
+Batching of variable-length sentences is straightforward. The following
+transformation batches *batch_size* elements from *source_target_dataset*, and
+respectively pads the source and target vectors to the length of the longest
+source and target vector in each batch.
 
-Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA T4.
+``` python
+batched_dataset = source_target_dataset.padded_batch(
+        batch_size,
+        padded_shapes=((tf.TensorShape([None]),  # source vectors of unknown size
+                        tf.TensorShape([])),     # size(source)
+                       (tf.TensorShape([None]),  # target vectors of unknown size
+                        tf.TensorShape([]))),    # size(target)
+        padding_values=((src_eos_id,  # source vectors padded on the right with src_eos_id
+                         0),          # size(source) -- unused
+                        (tgt_eos_id,  # target vectors padded on the right with tgt_eos_id
+                         0)))         # size(target) -- unused
+```
 
-Reported mixed precision speedups are relative to FP32 numbers for corresponding configuration.
+Values emitted from this dataset will be nested tuples whose tensors have a
+leftmost dimension of size *batch_size*.  The structure will be:
 
-| **Batch size** | **Beam size** | **Mixed precision tokens/s** | **Speedup** | **Mixed precision average latency (ms)** | **Average latency speedup** | **Mixed precision latency 50% (ms)** | **Latency 50% speedup** | **Mixed precision latency 90% (ms)** | **Latency 90% speedup** | **Mixed precision latency 95% (ms)** | **Latency 95% speedup** | **Mixed precision latency 99% (ms)** | **Latency 99% speedup** | **Mixed precision latency 100% (ms)** | **Latency 100% speedup** |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1     | 1     | 643   | 1.278 | 84    | 1.278 | 78    | 1.279 | 138   | 1.309 | 154   | 1.312 | 180   | 1.304 | 220   | 1.296 |
-| 1     | 2     | 584   | 1.693 | 92    | 1.692 | 86    | 1.686 | 150   | 1.743 | 168   | 1.737 | 201   | 1.770 | 236   | 1.742 |
-| 1     | 5     | 552   | 1.702 | 97    | 1.701 | 90    | 1.696 | 158   | 1.746 | 176   | 1.738 | 218   | 1.769 | 244   | 1.742 |
-| 2     | 1     | 948   | 1.776 | 114   | 1.776 | 108   | 1.769 | 170   | 1.803 | 184   | 1.807 | 218   | 1.783 | 241   | 1.794 |
-| 2     | 2     | 912   | 1.761 | 118   | 1.760 | 112   | 1.763 | 175   | 1.776 | 192   | 1.781 | 226   | 1.770 | 246   | 1.776 |
-| 2     | 5     | 832   | 1.900 | 128   | 1.900 | 121   | 1.910 | 192   | 1.912 | 214   | 1.922 | 258   | 1.922 | 266   | 1.905 |
-| 4     | 1     | 1596  | 1.792 | 135   | 1.792 | 132   | 1.791 | 187   | 1.799 | 197   | 1.815 | 241   | 1.784 | 245   | 1.796 |
-| 4     | 2     | 1495  | 1.928 | 144   | 1.927 | 141   | 1.926 | 201   | 1.927 | 216   | 1.936 | 250   | 1.956 | 264   | 1.890 |
-| 4     | 5     | 1308  | 1.702 | 164   | 1.702 | 159   | 1.702 | 230   | 1.722 | 251   | 1.742 | 283   | 1.708 | 288   | 1.699 |
-| 8     | 1     | 2720  | 1.981 | 159   | 1.981 | 158   | 1.992 | 204   | 1.975 | 219   | 1.986 | 249   | 1.987 | 252   | 1.966 |
-| 8     | 2     | 2554  | 1.809 | 169   | 1.808 | 168   | 1.829 | 224   | 1.797 | 237   | 1.783 | 260   | 1.807 | 262   | 1.802 |
-| 8     | 5     | 1979  | 1.768 | 216   | 1.768 | 213   | 1.780 | 292   | 1.797 | 319   | 1.793 | 334   | 1.760 | 336   | 1.769 |
-| 32    | 1     | 7449  | 1.775 | 232   | 1.774 | 231   | 1.777 | 292   | 1.789 | 300   | 1.760 | 301   | 1.768 | 301   | 1.768 |
-| 32    | 2     | 5569  | 1.670 | 309   | 1.669 | 311   | 1.672 | 389   | 1.652 | 392   | 1.665 | 401   | 1.651 | 404   | 1.644 |
-| 32    | 5     | 3079  | 1.867 | 556   | 1.867 | 555   | 1.865 | 692   | 1.858 | 695   | 1.860 | 702   | 1.847 | 703   | 1.847 |
-| 128   | 1     | 12986 | 1.662 | 532   | 1.662 | 529   | 1.667 | 607   | 1.643 | 608   | 1.645 | 609   | 1.647 | 609   | 1.647 |
-| 128   | 2     | 7856  | 1.734 | 878   | 1.734 | 911   | 1.755 | 966   | 1.742 | 967   | 1.741 | 968   | 1.744 | 968   | 1.744 |
-| 128   | 5     | 3361  | 1.683 | 2036  | 1.682 | 2186  | 1.678 | 2210  | 1.673 | 2210  | 1.674 | 2211  | 1.674 | 2211  | 1.674 |
-| 512   | 1     | 14932 | 1.825 | 1851  | 1.825 | 1889  | 1.808 | 1927  | 1.801 | 1928  | 1.800 | 1929  | 1.800 | 1930  | 1.799 |
-| 512   | 2     | 8109  | 1.786 | 3400  | 1.786 | 3505  | 1.783 | 3520  | 1.782 | 3523  | 1.781 | 3525  | 1.781 | 3525  | 1.781 |
-| 512   | 5     | 3370  | 1.802 | 8123  | 1.801 | 8376  | 1.798 | 8391  | 1.804 | 8394  | 1.804 | 8396  | 1.805 | 8397  | 1.805 |
+-  iterator[0][0] has the batched and padded source sentence matrices.
+-  iterator[0][1] has the batched source size vectors.
+-  iterator[1][0] has the batched and padded target sentence matrices.
+-  iterator[1][1] has the batched target size vectors.
+
+Finally, bucketing that batches similarly-sized source sentences together is
+also possible.  Please see the
+file
+[utils/iterator_utils.py](utils/iterator_utils.py) for
+more details and the full implementation.
+
+Reading data from a Dataset requires three lines of code: create the iterator,
+get its values, and initialize it.
+
+``` python
+batched_iterator = batched_dataset.make_initializable_iterator()
+
+((source, source_lengths), (target, target_lengths)) = batched_iterator.get_next()
+
+# At initialization time.
+session.run(batched_iterator.initializer, feed_dict={...})
+```
+
+Once the iterator is initialized, every *session.run* call that accesses source
+or target tensors will request the next minibatch from the underlying dataset.
+
+## Other details for better NMT models
+
+### Bidirectional RNNs
+
+Bidirectionality on the encoder side generally gives better performance (with
+some degradation in speed as more layers are used). Here, we give a simplified
+example of how to build an encoder with a single bidirectional layer:
+
+``` python
+# Construct forward and backward cells
+forward_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
+backward_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
+
+bi_outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(
+    forward_cell, backward_cell, encoder_emb_inp,
+    sequence_length=source_sequence_length, time_major=True)
+encoder_outputs = tf.concat(bi_outputs, -1)
+```
+
+The variables *encoder_outputs* and *encoder_state* can be used in the same way
+as in Section Encoder. Note that, for multiple bidirectional layers, we need to
+manipulate the encoder_state a bit, see [model.py](model.py), method
+*_build_bidirectional_rnn()* for more details.
+
+### Beam search
+
+While greedy decoding can give us quite reasonable translation quality, a beam
+search decoder can further boost performance. The idea of beam search is to
+better explore the search space of all possible translations by keeping around a
+small set of top candidates as we translate. The size of the beam is called
+*beam width*; a minimal beam width of, say size 10, is generally sufficient. For
+more information, we refer readers to Section 7.2.3
+of [Neubig, (2017)](https://arxiv.org/abs/1703.01619). Here's an example of how
+beam search can be done:
+
+``` python
+# Replicate encoder infos beam_width times
+decoder_initial_state = tf.contrib.seq2seq.tile_batch(
+    encoder_state, multiplier=hparams.beam_width)
+
+# Define a beam-search decoder
+decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+        cell=decoder_cell,
+        embedding=embedding_decoder,
+        start_tokens=start_tokens,
+        end_token=end_token,
+        initial_state=decoder_initial_state,
+        beam_width=beam_width,
+        output_layer=projection_layer,
+        length_penalty_weight=0.0,
+        coverage_penalty_weight=0.0)
+
+# Dynamic decoding
+outputs, _ = tf.contrib.seq2seq.dynamic_decode(decoder, ...)
+```
+
+Note that the same *dynamic_decode()* API call is used, similar to the
+Section [Decoder](#decoder). Once decoded, we can access the translations as
+follows:
+
+``` python
+translations = outputs.predicted_ids
+# Make sure translations shape is [batch_size, beam_width, time]
+if self.time_major:
+   translations = tf.transpose(translations, perm=[1, 2, 0])
+```
+
+See [model.py](model.py), method *_build_decoder()* for more details.
+
+### Hyperparameters
+
+There are several hyperparameters that can lead to additional
+performances. Here, we list some based on our own experience [ Disclaimers:
+others might not agree on things we wrote! ].
+
+***Optimizer***: while Adam can lead to reasonable results for "unfamiliar"
+architectures, SGD with scheduling will generally lead to better performance if
+you can train with SGD.
+
+***Attention***: Bahdanau-style attention often requires bidirectionality on the
+encoder side to work well; whereas Luong-style attention tends to work well for
+different settings. For this tutorial code, we recommend using the two improved
+variants of Luong & Bahdanau-style attentions: *scaled_luong* & *normed
+bahdanau*.
+
+### Multi-GPU training
+
+Training a NMT model may take several days. Placing different RNN layers on
+different GPUs can improve the training speed. Here’s an example to create
+RNN layers on multiple GPUs.
+
+``` python
+cells = []
+for i in range(num_layers):
+  cells.append(tf.contrib.rnn.DeviceWrapper(
+      tf.contrib.rnn.LSTMCell(num_units),
+      "/gpu:%d" % (num_layers % num_gpus)))
+cell = tf.contrib.rnn.MultiRNNCell(cells)
+```
+
+In addition, we need to enable the `colocate_gradients_with_ops` option in
+`tf.gradients` to parallelize the gradients computation.
+
+You may notice the speed improvement of the attention based NMT model is very
+small as the number of GPUs increases. One major drawback of the standard
+attention architecture is using the top (final) layer’s output to query
+attention at each time step. That means each decoding step must wait its
+previous step completely finished; hence, we can’t parallelize the decoding
+process by simply placing RNN layers on multiple GPUs.
+
+The [GNMT attention architecture](https://arxiv.org/pdf/1609.08144.pdf)
+parallelizes the decoder's computation by using the bottom (first) layer’s
+output to query attention. Therefore, each decoding step can start as soon as
+its previous step's first layer and attention computation finished. We
+implemented the architecture in
+[GNMTAttentionMultiCell](gnmt_model.py),
+a subclass of *tf.contrib.rnn.MultiRNNCell*. Here’s an example of how to create
+a decoder cell with the *GNMTAttentionMultiCell*.
+
+``` python
+cells = []
+for i in range(num_layers):
+  cells.append(tf.contrib.rnn.DeviceWrapper(
+      tf.contrib.rnn.LSTMCell(num_units),
+      "/gpu:%d" % (num_layers % num_gpus)))
+attention_cell = cells.pop(0)
+attention_cell = tf.contrib.seq2seq.AttentionWrapper(
+    attention_cell,
+    attention_mechanism,
+    attention_layer_size=None,  # don't add an additional dense layer.
+    output_attention=False,)
+cell = GNMTAttentionMultiCell(attention_cell, cells)
+```
+
+# Benchmarks
+
+## IWSLT English-Vietnamese
+
+Train: 133K examples, vocab=vocab.(vi|en), train=train.(vi|en)
+dev=tst2012.(vi|en),
+test=tst2013.(vi|en), [download script](scripts/download_iwslt15.sh).
+
+***Training details***. We train 2-layer LSTMs of 512 units with bidirectional
+encoder (i.e., 1 bidirectional layers for the encoder), embedding dim
+is 512. LuongAttention (scale=True) is used together with dropout keep_prob of
+0.8. All parameters are uniformly. We use SGD with learning rate 1.0 as follows:
+train for 12K steps (~ 12 epochs); after 8K steps, we start halving learning
+rate every 1K step.
+
+***Results***.
+
+Below are the averaged results of 2 models
+([model 1](http://download.tensorflow.org/models/envi_model_1.zip),
+[model 2](http://download.tensorflow.org/models/envi_model_2.zip)).\
+We measure the translation quality in terms of BLEU scores [(Papineni et al., 2002)](http://www.aclweb.org/anthology/P02-1040.pdf).
+
+Systems | tst2012 (dev) | test2013 (test)
+--- | :---: | :---:
+NMT (greedy) | 23.2 | 25.5
+NMT (beam=10) | 23.8 | **26.1**
+[(Luong & Manning, 2015)](https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf) | - | 23.3
+
+**Training Speed**: (0.37s step-time, 15.3K wps) on *K40m* & (0.17s step-time, 32.2K wps) on *TitanX*.\
+Here, step-time means the time taken to run one mini-batch (of size 128). For wps, we count words on both the source and target.
+
+## WMT German-English
+
+Train: 4.5M examples, vocab=vocab.bpe.32000.(de|en),
+train=train.tok.clean.bpe.32000.(de|en), dev=newstest2013.tok.bpe.32000.(de|en),
+test=newstest2015.tok.bpe.32000.(de|en),
+[download script](scripts/wmt16_en_de.sh)
+
+***Training details***. Our training hyperparameters are similar to the
+English-Vietnamese experiments except for the following details. The data is
+split into subword units using [BPE](https://github.com/rsennrich/subword-nmt)
+(32K operations). We train 4-layer LSTMs of 1024 units with bidirectional
+encoder (i.e., 2 bidirectional layers for the encoder), embedding dim
+is 1024. We train for 350K steps (~ 10 epochs); after 170K steps, we start
+halving learning rate every 17K step.
+
+***Results***.
+
+The first 2 rows are the averaged results of 2 models
+([model 1](http://download.tensorflow.org/models/deen_model_1.zip),
+[model 2](http://download.tensorflow.org/models/deen_model_2.zip)).
+Results in the third row is with GNMT attention
+([model](http://download.tensorflow.org/models/10122017/deen_gnmt_model_4_layer.zip))
+; trained with 4 GPUs.
+
+Systems | newstest2013 (dev) | newstest2015
+--- | :---: | :---:
+NMT (greedy) | 27.1 | 27.6
+NMT (beam=10) | 28.0 | 28.9
+NMT + GNMT attention (beam=10) | 29.0 | **29.9**
+[WMT SOTA](http://matrix.statmt.org/) | - | 29.3
+
+These results show that our code builds strong baseline systems for NMT.\
+(Note that WMT systems generally utilize a huge amount monolingual data which we currently do not.)
+
+**Training Speed**: (2.1s step-time, 3.4K wps) on *Nvidia K40m* & (0.7s step-time, 8.7K wps) on *Nvidia TitanX* for standard models.\
+To see the speed-ups with GNMT attention, we benchmark on *K40m* only:
+
+Systems | 1 gpu | 4 gpus | 8 gpus
+--- | :---: | :---: | :---:
+NMT (4 layers) | 2.2s, 3.4K | 1.9s, 3.9K | -
+NMT (8 layers) | 3.5s, 2.0K | - | 2.9s, 2.4K
+NMT + GNMT attention (4 layers) | 2.6s, 2.8K | 1.7s, 4.3K | -
+NMT + GNMT attention (8 layers) | 4.2s, 1.7K | - | 1.9s, 3.8K
+
+These results show that without GNMT attention, the gains from using multiple gpus are minimal.\
+With GNMT attention, we obtain from 50%-100% speed-ups with multiple gpus.
+
+## WMT English-German &mdash; Full Comparison
+The first 2 rows are our models with GNMT
+attention:
+[model 1 (4 layers)](http://download.tensorflow.org/models/10122017/ende_gnmt_model_4_layer.zip),
+[model 2 (8 layers)](http://download.tensorflow.org/models/10122017/ende_gnmt_model_8_layer.zip).
+
+Systems | newstest2014 | newstest2015
+--- | :---: | :---:
+*Ours* &mdash; NMT + GNMT attention (4 layers) | 23.7 | 26.5
+*Ours* &mdash; NMT + GNMT attention (8 layers) | 24.4 | **27.6**
+[WMT SOTA](http://matrix.statmt.org/) | 20.6 | 24.9
+OpenNMT [(Klein et al., 2017)](https://arxiv.org/abs/1701.02810) | 19.3 | -
+tf-seq2seq [(Britz et al., 2017)](https://arxiv.org/abs/1703.03906) | 22.2 | 25.2
+GNMT [(Wu et al., 2016)](https://research.google.com/pubs/pub45610.html) | **24.6** | -
+
+The above results show our models are very competitive among models of similar architectures.\
+[Note that OpenNMT uses smaller models and the current best result (as of this writing) is 28.4 obtained by the Transformer network [(Vaswani et al., 2017)](https://arxiv.org/abs/1706.03762) which has a significantly different architecture.]
 
 
-## Release notes
+## Standard HParams
 
-### Changelog
-1. Mar 18, 2019
-  * Initial release
-2. June, 2019
-  * Performance improvements
-3. June, 2020
-  * Updated performance tables to include A100 results
+We have provided
+[a set of standard hparams](standard_hparams/)
+for using pre-trained checkpoint for inference or training NMT architectures
+used in the Benchmark.
 
-### Known issues
-There are no known issues in this release.
+We will use the WMT16 German-English data, you can download the data by the
+following command.
+
+```
+scripts/wmt16_en_de.sh /tmp/wmt16
+```
+
+Here is an example command for loading the pre-trained GNMT WMT German-English
+checkpoint for inference.
+
+```
+python -m nmt.nmt \
+    --src=de --tgt=en \
+    --ckpt=/path/to/checkpoint/translate.ckpt \
+    --hparams_path=standard_hparams/wmt16_gnmt_4_layer.json \
+    --out_dir=/tmp/deen_gnmt \
+    --vocab_prefix=/tmp/wmt16/vocab.bpe.32000 \
+    --inference_input_file=/tmp/wmt16/newstest2014.tok.bpe.32000.de \
+    --inference_output_file=/tmp/deen_goutput_infer \
+    --inference_ref_file=/tmp/wmt16/newstest2014.tok.bpe.32000.en
+```
+
+Here is an example command for training the GNMT WMT German-English model.
+
+```
+python -m nmt.nmt \
+    --src=de --tgt=en \
+    --hparams_path=standard_hparams/wmt16_gnmt_4_layer.json \
+    --out_dir=/tmp/deen_gnmt \
+    --vocab_prefix=/tmp/wmt16/vocab.bpe.32000 \
+    --train_prefix=/tmp/wmt16/train.tok.clean.bpe.32000 \
+    --dev_prefix=/tmp/wmt16/newstest2013.tok.bpe.32000 \
+    --test_prefix=/tmp/wmt16/newstest2015.tok.bpe.32000
+```
+
+
+# Other resources
+
+For deeper reading on Neural Machine Translation and sequence-to-sequence
+models, we highly recommend the following materials
+by
+[Luong, Cho, Manning, (2016)](https://sites.google.com/site/acl16);
+[Luong, (2016)](https://github.com/lmthang/thesis);
+and [Neubig, (2017)](https://arxiv.org/abs/1703.01619).
+
+There's a wide variety of tools for building seq2seq models, so we pick one per
+language:\
+Stanford NMT
+[https://nlp.stanford.edu/projects/](https://nlp.stanford.edu/projects/)
+*[Matlab]* \
+tf-seq2seq
+[https://github.com/google/seq2seq](https://github.com/google/seq2seq)
+*[TensorFlow]* \
+Nemantus
+[https://github.com/rsennrich/nematus](https://github.com/rsennrich/nematus)
+*[Theano]* \
+OpenNMT [http://opennmt.net/](http://opennmt.net/) *[Torch]*\
+OpenNMT-py [https://github.com/OpenOpenNMT-py](https://github.com/OpenOpenNMT-py) *[PyTorch]*
+
+
+
+# Acknowledgment
+We would like to thank Denny Britz, Anna Goldie, Derek Murray, and Cinjon Resnick for their work bringing new features to TensorFlow and the seq2seq library. Additional thanks go to Lukasz Kaiser for the initial help on the seq2seq codebase; Quoc Le for the suggestion to replicate GNMT; Yonghui Wu and Zhifeng Chen for details on the GNMT systems; as well as the Google Brain team for their support and feedback!
+
+# References
+
+-  Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua
+   Bengio. 2015.[ Neural machine translation by jointly learning to align and translate](https://arxiv.org/pdf/1409.0473.pdf). ICLR.
+-  Minh-Thang Luong, Hieu Pham, and Christopher D
+   Manning. 2015.[ Effective approaches to attention-based neural machine translation](https://arxiv.org/pdf/1508.04025.pdf). EMNLP.
+-  Ilya Sutskever, Oriol Vinyals, and Quoc
+   V. Le. 2014.[ Sequence to sequence learning with neural networks](https://papers.nips.cc/paper/5346-sequence-to-sequence-learning-with-neural-networks.pdf). NIPS.
+
+# BibTex
+
+```
+@article{luong17,
+  author  = {Minh{-}Thang Luong and Eugene Brevdo and Rui Zhao},
+  title   = {Neural Machine Translation (seq2seq) Tutorial},
+  journal = {https://github.com/tensorflow/nmt},
+  year    = {2017},
+}
+```

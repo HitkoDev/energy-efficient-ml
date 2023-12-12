@@ -25,7 +25,7 @@ import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
 
-from utils import misc_utils as utils
+from ..utils import misc_utils as utils
 
 # word level special token
 UNK = "<unk>"
@@ -50,7 +50,7 @@ def _string_to_bytes(text, max_length):
   This process mimics docqa/elmo's preprocessing:
   https://github.com/allenai/document-qa/blob/master/docqa/elmo/data.py
 
-  Note that we make use of BOS_CHAR_ID and EOS_CHAR_ID in iterator_utils.py &
+  Note that we make use of BOS_CHAR_ID and EOS_CHAR_ID in iterator_utils.py & 
   our usage differs from docqa/elmo.
 
   Args:
@@ -108,8 +108,8 @@ def load_vocab(vocab_file):
   return vocab, vocab_size
 
 
-def check_vocab(vocab_file, output_dir, check_special_token=True, sos=None,
-                eos=None, unk=None, pad_vocab=False):
+def check_vocab(vocab_file, out_dir, check_special_token=True, sos=None,
+                eos=None, unk=None):
   """Check if vocab_file doesn't exist, create from corpus_file."""
   if tf.gfile.Exists(vocab_file):
     utils.print_out("# Vocab file %s exists" % vocab_file)
@@ -127,23 +127,12 @@ def check_vocab(vocab_file, output_dir, check_special_token=True, sos=None,
                         (vocab[0], vocab[1], vocab[2], unk, sos, eos))
         vocab = [unk, sos, eos] + vocab
         vocab_size += 3
-        new_vocab_file = os.path.join(output_dir, os.path.basename(vocab_file))
+        new_vocab_file = os.path.join(out_dir, os.path.basename(vocab_file))
         with codecs.getwriter("utf-8")(
             tf.gfile.GFile(new_vocab_file, "wb")) as f:
           for word in vocab:
             f.write("%s\n" % word)
         vocab_file = new_vocab_file
-    if pad_vocab == True and vocab_size % 8 != 0:
-        new_vocab_file = os.path.join(output_dir, os.path.basename(vocab_file))
-        padded_vocab_size = ((vocab_size + 8 - 1)// 8) * 8
-        for i in range(0, padded_vocab_size - vocab_size):
-            token = "<madeupword" + str(i) + ">"
-            vocab.append(token)
-        with codecs.getwriter("utf-8")(
-            tf.gfile.GFile(new_vocab_file, "wb")) as f:
-            for word in vocab:
-                f.write("%s\n" % word)
-            vocab_file = new_vocab_file
   else:
     raise ValueError("vocab_file '%s' does not exist." % vocab_file)
 

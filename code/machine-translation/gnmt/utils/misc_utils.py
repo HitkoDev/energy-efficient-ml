@@ -24,25 +24,19 @@ import os
 import sys
 import time
 from distutils import version
+
+import numpy as np
+import six
 import tensorflow as tf
 
 
 def check_tensorflow_version():
   # LINT.IfChange
-  min_tf_version = "1.3.0"
-  # LINT
+  min_tf_version = "1.12.0"
+  # LINT.ThenChange(<pwd>/nmt/copy.bara.sky)
   if (version.LooseVersion(tf.__version__) <
       version.LooseVersion(min_tf_version)):
     raise EnvironmentError("Tensorflow version must >= %s" % min_tf_version)
-
-
-def weighted_avg(inputs, weights, force_fp32=False):
-  dtype = tf.float32 if force_fp32 else inputs[0].dtype
-  inputs = [tf.cast(x, dtype) for x in inputs]
-  weights = [tf.cast(x, dtype) for x in weights]
-  norm = tf.add_n([x * y for x, y in zip(inputs, weights)])
-  denorm = tf.add_n(weights)
-  return norm / denorm
 
 
 def safe_exp(value):
@@ -67,15 +61,15 @@ def print_out(s, f=None, new_line=True):
     s = s.decode("utf-8")
 
   if f:
-    f.write(s)
+    f.write(s.encode("utf-8"))
     if new_line:
-      f.write(u"\n")
+      f.write(b"\n")
 
   # stdout
-  out_s = s.encode("utf-8")
-  if not isinstance(out_s, str):
-    out_s = out_s.decode("utf-8")
-  print(out_s, end="", file=sys.stdout)
+  if six.PY2:
+    sys.stdout.write(s.encode("utf-8"))
+  else:
+    sys.stdout.buffer.write(s.encode("utf-8"))
 
   if new_line:
     sys.stdout.write("\n")
@@ -90,15 +84,6 @@ def print_hparams(hparams, skip_patterns=None, header=None):
     if not skip_patterns or all(
         [skip_pattern not in key for skip_pattern in skip_patterns]):
       print_out("  %s=%s" % (key, str(values[key])))
-
-
-def serialize_hparams(hparams):
-  """Print hparams, can skip keys based on pattern."""
-  values = hparams.values()
-  res = ""
-  for key in sorted(values.keys()):
-    res += "%s=%s\n" % (key, str(values[key]))
-  return res
 
 
 def load_hparams(model_dir):
@@ -127,9 +112,9 @@ def maybe_parse_standard_hparams(hparams, hparams_path):
   return hparams
 
 
-def save_hparams(output_dir, hparams):
+def save_hparams(out_dir, hparams):
   """Save hparams."""
-  hparams_file = os.path.join(output_dir, "hparams")
+  hparams_file = os.path.join(out_dir, "hparams")
   print_out("  saving hparams to %s" % hparams_file)
   with codecs.getwriter("utf-8")(tf.gfile.GFile(hparams_file, "wb")) as f:
     f.write(hparams.to_json(indent=4, sort_keys=True))
@@ -143,9 +128,29 @@ def debug_tensor(s, msg=None, summarize=10):
 
 
 def add_summary(summary_writer, global_step, tag, value):
-  """Add a new summary to the current summary_writer."""
+  """Add a new summary to the current summary_writer.
+  Useful to log things that are not part of the training graph, e.g., tag=BLEU.
+  """
   summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
   summary_writer.add_summary(summary, global_step)
+
+
+def get_config_proto(log_device_placement=False, allow_soft_placement=True,
+                     num_intra_threads=0, num_inter_threads=0):
+  # GPU options:
+  # https://www.tensorflow.org/versions/r0.10/how_tos/using_gpu/index.html
+  config_proto = tf.ConfigProto(
+      log_device_placement=log_device_placement,
+      allow_soft_placement=allow_soft_placement)
+  config_proto.gpu_options.allow_growth = True
+
+  # CPU threads options
+  if num_intra_threads:
+    config_proto.intra_op_parallelism_threads = num_intra_threads
+  if num_inter_threads:
+    config_proto.inter_op_parallelism_threads = num_inter_threads
+
+  return config_proto
 
 
 def format_text(words):

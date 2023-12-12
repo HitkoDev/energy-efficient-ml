@@ -1,5 +1,7 @@
-__pycache__
-*.log
-/results
-/data
-.DS_Store
+bazel-bin
+bazel-genfiles
+bazel-out
+bazel-testlogs
+
+wmt16_de_en
+data

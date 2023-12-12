@@ -23,20 +23,24 @@ import numpy as np
 import six
 import tensorflow as tf
 
-from utils import math_utils
-from utils import misc_utils as utils
-from utils import vocab_utils
+from tensorflow.python.ops import lookup_ops
+from .utils import iterator_utils
+from .utils import misc_utils as utils
+from .utils import vocab_utils
 
 __all__ = [
-    "get_initializer", "create_emb_for_encoder_and_decoder", "create_rnn_cell",
-    "gradient_clip", "create_or_load_model", "load_model", "avg_checkpoints",
+    "get_initializer", "get_device_str", "create_train_model",
+    "create_eval_model", "create_infer_model",
+    "create_emb_for_encoder_and_decoder", "create_rnn_cell", "gradient_clip",
+    "create_or_load_model", "load_model", "avg_checkpoints",
+    "compute_perplexity"
 ]
 
 # If a vocab size is greater than this value, put the embedding on cpu instead
 VOCAB_SIZE_THRESHOLD_CPU = 50000
 
 
-def get_initializer(init_op, seed=None, init_weight=0):
+def get_initializer(init_op, seed=None, init_weight=None):
   """Create an initializer. init_weight is only for uniform."""
   if init_op == "uniform":
     assert init_weight
@@ -48,12 +52,16 @@ def get_initializer(init_op, seed=None, init_weight=0):
   elif init_op == "glorot_uniform":
     return tf.keras.initializers.glorot_uniform(
         seed=seed)
-  elif init_op.isdigit():
-    # dtype is default fp32 for variables.
-    val = int(init_op)
-    return tf.constant_initializer(val)
   else:
     raise ValueError("Unknown init_op %s" % init_op)
+
+
+def get_device_str(device_id, num_gpus):
+  """Return a device string for multi-GPU setup."""
+  if num_gpus == 0:
+    return "/cpu:0"
+  device_str_output = "/gpu:%d" % (device_id % num_gpus)
+  return device_str_output
 
 
 class ExtraArgs(collections.namedtuple(
@@ -66,6 +74,164 @@ class TrainModel(
     collections.namedtuple("TrainModel", ("graph", "model", "iterator",
                                           "skip_count_placeholder"))):
   pass
+
+
+def create_train_model(
+    model_creator, hparams, scope=None, num_workers=1, jobid=0,
+    extra_args=None):
+  """Create train graph, model, and iterator."""
+  src_file = "%s.%s" % (hparams.train_prefix, hparams.src)
+  tgt_file = "%s.%s" % (hparams.train_prefix, hparams.tgt)
+  src_vocab_file = hparams.src_vocab_file
+  tgt_vocab_file = hparams.tgt_vocab_file
+
+  graph = tf.Graph()
+
+  with graph.as_default(), tf.container(scope or "train"):
+    src_vocab_table, tgt_vocab_table = vocab_utils.create_vocab_tables(
+        src_vocab_file, tgt_vocab_file, hparams.share_vocab)
+
+    src_dataset = tf.data.TextLineDataset(tf.gfile.Glob(src_file))
+    tgt_dataset = tf.data.TextLineDataset(tf.gfile.Glob(tgt_file))
+    skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)
+
+    iterator = iterator_utils.get_iterator(
+        src_dataset,
+        tgt_dataset,
+        src_vocab_table,
+        tgt_vocab_table,
+        batch_size=hparams.batch_size,
+        sos=hparams.sos,
+        eos=hparams.eos,
+        random_seed=hparams.random_seed,
+        num_buckets=hparams.num_buckets,
+        src_max_len=hparams.src_max_len,
+        tgt_max_len=hparams.tgt_max_len,
+        skip_count=skip_count_placeholder,
+        num_shards=num_workers,
+        shard_index=jobid,
+        use_char_encode=hparams.use_char_encode)
+
+    # Note: One can set model_device_fn to
+    # `tf.train.replica_device_setter(ps_tasks)` for distributed training.
+    model_device_fn = None
+    if extra_args: model_device_fn = extra_args.model_device_fn
+    with tf.device(model_device_fn):
+      model = model_creator(
+          hparams,
+          iterator=iterator,
+          mode=tf.contrib.learn.ModeKeys.TRAIN,
+          source_vocab_table=src_vocab_table,
+          target_vocab_table=tgt_vocab_table,
+          scope=scope,
+          extra_args=extra_args)
+
+  return TrainModel(
+      graph=graph,
+      model=model,
+      iterator=iterator,
+      skip_count_placeholder=skip_count_placeholder)
+
+
+class EvalModel(
+    collections.namedtuple("EvalModel",
+                           ("graph", "model", "src_file_placeholder",
+                            "tgt_file_placeholder", "iterator"))):
+  pass
+
+
+def create_eval_model(model_creator, hparams, scope=None, extra_args=None):
+  """Create train graph, model, src/tgt file holders, and iterator."""
+  src_vocab_file = hparams.src_vocab_file
+  tgt_vocab_file = hparams.tgt_vocab_file
+  graph = tf.Graph()
+
+  with graph.as_default(), tf.container(scope or "eval"):
+    src_vocab_table, tgt_vocab_table = vocab_utils.create_vocab_tables(
+        src_vocab_file, tgt_vocab_file, hparams.share_vocab)
+    reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
+        tgt_vocab_file, default_value=vocab_utils.UNK)
+
+    src_file_placeholder = tf.placeholder(shape=(), dtype=tf.string)
+    tgt_file_placeholder = tf.placeholder(shape=(), dtype=tf.string)
+    src_dataset = tf.data.TextLineDataset(src_file_placeholder)
+    tgt_dataset = tf.data.TextLineDataset(tgt_file_placeholder)
+    iterator = iterator_utils.get_iterator(
+        src_dataset,
+        tgt_dataset,
+        src_vocab_table,
+        tgt_vocab_table,
+        hparams.batch_size,
+        sos=hparams.sos,
+        eos=hparams.eos,
+        random_seed=hparams.random_seed,
+        num_buckets=hparams.num_buckets,
+        src_max_len=hparams.src_max_len_infer,
+        tgt_max_len=hparams.tgt_max_len_infer,
+        use_char_encode=hparams.use_char_encode)
+    model = model_creator(
+        hparams,
+        iterator=iterator,
+        mode=tf.contrib.learn.ModeKeys.EVAL,
+        source_vocab_table=src_vocab_table,
+        target_vocab_table=tgt_vocab_table,
+        reverse_target_vocab_table=reverse_tgt_vocab_table,
+        scope=scope,
+        extra_args=extra_args)
+  return EvalModel(
+      graph=graph,
+      model=model,
+      src_file_placeholder=src_file_placeholder,
+      tgt_file_placeholder=tgt_file_placeholder,
+      iterator=iterator)
+
+
+class InferModel(
+    collections.namedtuple("InferModel",
+                           ("graph", "model", "src_placeholder",
+                            "batch_size_placeholder", "iterator"))):
+  pass
+
+
+def create_infer_model(model_creator, hparams, scope=None, extra_args=None):
+  """Create inference model."""
+  graph = tf.Graph()
+  src_vocab_file = hparams.src_vocab_file
+  tgt_vocab_file = hparams.tgt_vocab_file
+
+  with graph.as_default(), tf.container(scope or "infer"):
+    src_vocab_table, tgt_vocab_table = vocab_utils.create_vocab_tables(
+        src_vocab_file, tgt_vocab_file, hparams.share_vocab)
+    reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
+        tgt_vocab_file, default_value=vocab_utils.UNK)
+
+    src_placeholder = tf.placeholder(shape=[None], dtype=tf.string)
+    batch_size_placeholder = tf.placeholder(shape=[], dtype=tf.int64)
+
+    src_dataset = tf.data.Dataset.from_tensor_slices(
+        src_placeholder)
+    iterator = iterator_utils.get_infer_iterator(
+        src_dataset,
+        src_vocab_table,
+        batch_size=batch_size_placeholder,
+        eos=hparams.eos,
+        src_max_len=hparams.src_max_len_infer,
+        use_char_encode=hparams.use_char_encode)
+    model = model_creator(
+        hparams,
+        iterator=iterator,
+        mode=tf.contrib.learn.ModeKeys.INFER,
+        source_vocab_table=src_vocab_table,
+        target_vocab_table=tgt_vocab_table,
+        reverse_target_vocab_table=reverse_tgt_vocab_table,
+        scope=scope,
+        extra_args=extra_args)
+  return InferModel(
+      graph=graph,
+      model=model,
+      src_placeholder=src_placeholder,
+      batch_size_placeholder=batch_size_placeholder,
+      iterator=iterator)
 
 
 def _get_embed_device(vocab_size):
@@ -82,15 +248,9 @@ def _create_pretrained_emb_from_txt(
   """Load pretrain embeding from embed_file, and return an embedding matrix.
 
   Args:
-    vocab_file: Path to vocab file.
-    embed_file: Path to a Glove formmated embedding txt file.
+    embed_file: Path to a Glove formated embedding txt file.
     num_trainable_tokens: Make the first n tokens in the vocab file as trainable
       variables. Default is 3, which is "<unk>", "<s>" and "</s>".
-    dtype: data type.
-    scope: tf scope name.
-
-  Returns:
-    pretrained embedding table variable.
   """
   vocab, _ = vocab_utils.load_vocab(vocab_file)
   trainable_tokens = vocab[:num_trainable_tokens]
@@ -109,8 +269,9 @@ def _create_pretrained_emb_from_txt(
   emb_mat = tf.constant(emb_mat)
   emb_mat_const = tf.slice(emb_mat, [num_trainable_tokens, 0], [-1, -1])
   with tf.variable_scope(scope or "pretrain_embeddings", dtype=dtype) as scope:
-    emb_mat_var = tf.get_variable(
-        "emb_mat_var", [num_trainable_tokens, emb_size])
+    with tf.device(_get_embed_device(num_trainable_tokens)):
+      emb_mat_var = tf.get_variable(
+          "emb_mat_var", [num_trainable_tokens, emb_size])
   return tf.concat([emb_mat_var, emb_mat_const], 0)
 
 
@@ -120,8 +281,9 @@ def _create_or_load_embed(embed_name, vocab_file, embed_file,
   if vocab_file and embed_file:
     embedding = _create_pretrained_emb_from_txt(vocab_file, embed_file)
   else:
-    embedding = tf.get_variable(
-        embed_name, [vocab_size, embed_size], dtype)
+    with tf.device(_get_embed_device(vocab_size)):
+      embedding = tf.get_variable(
+          embed_name, [vocab_size, embed_size], dtype)
   return embedding
 
 
@@ -155,11 +317,6 @@ def create_emb_for_encoder_and_decoder(share_vocab,
       vars.
     num_dec_partitions: number of partitions used for the decoder's embedding
       vars.
-    src_vocab_file: A string. The source vocabulary file.
-    tgt_vocab_file: A string. The target vocabulary file.
-    src_embed_file: A string. The source embedding file.
-    tgt_embed_file: A string. The target embedding file.
-    use_char_encode: A boolean. If true, use char encoder.
     scope: VariableScope for the created subgraph. Default to "embedding".
 
   Returns:
@@ -231,29 +388,8 @@ def create_emb_for_encoder_and_decoder(share_vocab,
   return embedding_encoder, embedding_decoder
 
 
-def build_cell(cell, input_shape):
-  if isinstance(cell, tf.contrib.rnn.MultiRNNCell):
-    assert isinstance(input_shape, collections.Sequence)
-    for i, c in enumerate(cell._cells):
-      if i == 0:
-        c.build((None, input_shape))
-      else:
-        c.build((None, c.num_units))
-    return
-
-  if isinstance(cell, tf.nn.rnn_cell.DropoutWrapper):
-    build_cell(cell._cell, input_shape)
-  elif isinstance(cell, tf.nn.rnn_cell.ResidualWrapper):
-    build_cell(cell._cell, input_shape)
-  elif isinstance(cell, tf.nn.rnn_cell.LSTMCell):
-    cell.build(input_shape)
-  else:
-    raise ValueError("%s not supported" % type(cell))
-
-
 def _single_cell(unit_type, num_units, forget_bias, dropout, mode,
-                 dtype=None, residual_connection=False, residual_fn=None,
-                 use_block_lstm=False):
+                 residual_connection=False, device_str=None, residual_fn=None):
   """Create an instance of a single RNN cell."""
   # dropout (= 1 - keep_prob) is set to 0 during eval and infer
   dropout = dropout if mode == tf.contrib.learn.ModeKeys.TRAIN else 0.0
@@ -261,12 +397,9 @@ def _single_cell(unit_type, num_units, forget_bias, dropout, mode,
   # Cell Type
   if unit_type == "lstm":
     utils.print_out("  LSTM, forget_bias=%g" % forget_bias, new_line=False)
-    if not use_block_lstm:
-      single_cell = tf.nn.rnn_cell.LSTMCell(
-          num_units, dtype=dtype, forget_bias=forget_bias)
-    else:
-      single_cell = tf.contrib.rnn.LSTMBlockCell(
-          num_units, forget_bias=forget_bias)
+    single_cell = tf.contrib.rnn.BasicLSTMCell(
+        num_units,
+        forget_bias=forget_bias)
   elif unit_type == "gru":
     utils.print_out("  GRU", new_line=False)
     single_cell = tf.contrib.rnn.GRUCell(num_units)
@@ -296,12 +429,18 @@ def _single_cell(unit_type, num_units, forget_bias, dropout, mode,
         single_cell, residual_fn=residual_fn)
     utils.print_out("  %s" % type(single_cell).__name__, new_line=False)
 
+  # Device Wrapper
+  if device_str:
+    single_cell = tf.contrib.rnn.DeviceWrapper(single_cell, device_str)
+    utils.print_out("  %s, device=%s" %
+                    (type(single_cell).__name__, device_str), new_line=False)
+
   return single_cell
 
 
 def _cell_list(unit_type, num_units, num_layers, num_residual_layers,
-               forget_bias, dropout, mode, dtype=None,
-               single_cell_fn=None, residual_fn=None, use_block_lstm=False):
+               forget_bias, dropout, mode, num_gpus, base_gpu=0,
+               single_cell_fn=None, residual_fn=None):
   """Create a list of RNN cells."""
   if not single_cell_fn:
     single_cell_fn = _single_cell
@@ -316,10 +455,9 @@ def _cell_list(unit_type, num_units, num_layers, num_residual_layers,
         forget_bias=forget_bias,
         dropout=dropout,
         mode=mode,
-        dtype=dtype,
         residual_connection=(i >= num_layers - num_residual_layers),
-        residual_fn=residual_fn,
-        use_block_lstm=use_block_lstm
+        device_str=get_device_str(i + base_gpu, num_gpus),
+        residual_fn=residual_fn
     )
     utils.print_out("")
     cell_list.append(single_cell)
@@ -328,8 +466,8 @@ def _cell_list(unit_type, num_units, num_layers, num_residual_layers,
 
 
 def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers,
-                    forget_bias, dropout, mode, dtype=None,
-                    single_cell_fn=None, use_block_lstm=False):
+                    forget_bias, dropout, mode, num_gpus, base_gpu=0,
+                    single_cell_fn=None):
   """Create multi-layer RNN cell.
 
   Args:
@@ -343,6 +481,11 @@ def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers,
     dropout: floating point value between 0.0 and 1.0:
       the probability of dropout.  this is ignored if `mode != TRAIN`.
     mode: either tf.contrib.learn.TRAIN/EVAL/INFER
+    num_gpus: The number of gpus to use when performing round-robin
+      placement of layers.
+    base_gpu: The gpu device id to use for the first RNN cell in the
+      returned list. The i-th RNN cell will use `(base_gpu + i) % num_gpus`
+      as its device id.
     single_cell_fn: allow for adding customized cell.
       When not specified, we default to model_helper._single_cell
   Returns:
@@ -355,9 +498,9 @@ def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers,
                          forget_bias=forget_bias,
                          dropout=dropout,
                          mode=mode,
-                         dtype=dtype,
-                         single_cell_fn=single_cell_fn,
-                         use_block_lstm=use_block_lstm)
+                         num_gpus=num_gpus,
+                         base_gpu=base_gpu,
+                         single_cell_fn=single_cell_fn)
 
   if len(cell_list) == 1:  # Single layer.
     return cell_list[0]
@@ -367,10 +510,13 @@ def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers,
 
 def gradient_clip(gradients, max_gradient_norm):
   """Clipping gradients of a model."""
-  clipped_gradients, gradient_norm = math_utils.clip_by_global_norm(
+  clipped_gradients, gradient_norm = tf.clip_by_global_norm(
       gradients, max_gradient_norm)
+  gradient_norm_summary = [tf.summary.scalar("grad_norm", gradient_norm)]
+  gradient_norm_summary.append(
+      tf.summary.scalar("clipped_gradient", tf.global_norm(clipped_gradients)))
 
-  return clipped_gradients, gradient_norm
+  return clipped_gradients, gradient_norm_summary, gradient_norm
 
 
 def print_variables_in_ckpt(ckpt_path):
@@ -399,7 +545,8 @@ def load_model(model, ckpt_path, session, name):
   return model
 
 
-def avg_checkpoints(model_dir, num_last_checkpoints, global_step_name):
+def avg_checkpoints(model_dir, num_last_checkpoints, global_step,
+                    global_step_name):
   """Average the last N checkpoints in the model_dir."""
   checkpoint_state = tf.train.get_checkpoint_state(model_dir)
   if not checkpoint_state:
@@ -413,7 +560,8 @@ def avg_checkpoints(model_dir, num_last_checkpoints, global_step_name):
   if len(checkpoints) < num_last_checkpoints:
     utils.print_out(
         "# Skipping averaging checkpoints because not enough checkpoints is "
-        "available.")
+        "avaliable."
+    )
     return None
 
   avg_model_dir = os.path.join(model_dir, "avg_checkpoints")
@@ -451,7 +599,9 @@ def avg_checkpoints(model_dir, num_last_checkpoints, global_step_name):
 
     placeholders = [tf.placeholder(v.dtype, shape=v.shape) for v in tf_vars]
     assign_ops = [tf.assign(v, p) for (v, p) in zip(tf_vars, placeholders)]
-    saver = tf.train.Saver(tf.all_variables(), save_relative_paths=True)
+    global_step_var = tf.Variable(
+        global_step, name=global_step_name, trainable=False)
+    saver = tf.train.Saver(tf.all_variables())
 
     with tf.Session() as sess:
       sess.run(tf.initialize_all_variables())
@@ -482,3 +632,32 @@ def create_or_load_model(model, model_dir, session, name):
 
   global_step = model.global_step.eval(session=session)
   return model, global_step
+
+
+def compute_perplexity(model, sess, name):
+  """Compute perplexity of the output of the model.
+
+  Args:
+    model: model for compute perplexity.
+    sess: tensorflow session to use.
+    name: name of the batch.
+
+  Returns:
+    The perplexity of the eval outputs.
+  """
+  total_loss = 0
+  total_predict_count = 0
+  start_time = time.time()
+
+  while True:
+    try:
+      output_tuple = model.eval(sess)
+      total_loss += output_tuple.eval_loss * output_tuple.batch_size
+      total_predict_count += output_tuple.predict_count
+    except tf.errors.OutOfRangeError:
+      break
+
+  perplexity = utils.safe_exp(total_loss / total_predict_count)
+  utils.print_time("  eval %s: perplexity %.2f" % (name, perplexity),
+                   start_time)
+  return perplexity

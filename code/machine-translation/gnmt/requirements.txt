@@ -1,2 +1,0 @@
-sacrebleu==1.2.10
-DLLogger @ git+https://github.com/NVIDIA/dllogger@26a0f8f1958de2c0c460925ff6102a4d2486d6cc
