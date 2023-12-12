@@ -105,6 +105,38 @@ cp ${OUTPUT_DIR_DATA}/dev/dev/newstest20*.en ${OUTPUT_DIR}
 cp ${OUTPUT_DIR_DATA}/test/test/newstest20*.de ${OUTPUT_DIR}
 cp ${OUTPUT_DIR_DATA}/test/test/newstest20*.en ${OUTPUT_DIR}
 
+# Concatenate newstest based on the paper
+# "The models were trained on the WMT09-WMT14 English-German newstest dataset, 
+# and we use the WMT15/16 English-German newstest dataset to create our premodel training data."
+
+cat "${OUTPUT_DIR}/newstest2009.en" \
+  "${OUTPUT_DIR}/newstest2010.en" \
+  "${OUTPUT_DIR}/newstest2011.en" \
+  "${OUTPUT_DIR}/newstest2012.en" \
+  "${OUTPUT_DIR}/newstest2013.en" \
+  "${OUTPUT_DIR}/newstest2014.en" \
+  > "${OUTPUT_DIR}/models.train.en"
+wc -l "${OUTPUT_DIR}/models.train.en"
+
+cat "${OUTPUT_DIR}/newstest2015.en" \
+  "${OUTPUT_DIR}/newstest2016.en" \
+  > "${OUTPUT_DIR}/premodels.train.en"
+wc -l "${OUTPUT_DIR}/premodels.train.en"
+
+cat "${OUTPUT_DIR}/newstest2009.de" \
+  "${OUTPUT_DIR}/newstest2010.de" \
+  "${OUTPUT_DIR}/newstest2011.de" \
+  "${OUTPUT_DIR}/newstest2012.de" \
+  "${OUTPUT_DIR}/newstest2013.de" \
+  "${OUTPUT_DIR}/newstest2014.de" \
+  > "${OUTPUT_DIR}/models.train.de"
+wc -l "${OUTPUT_DIR}/models.train.de"
+
+cat "${OUTPUT_DIR}/newstest2015.de" \
+  "${OUTPUT_DIR}/newstest2016.de" \
+  > "${OUTPUT_DIR}/premodels.train.de"
+wc -l "${OUTPUT_DIR}/premodels.train.de"
+
 # Tokenize data
 for f in ${OUTPUT_DIR}/*.de; do
   echo "Tokenizing $f..."
