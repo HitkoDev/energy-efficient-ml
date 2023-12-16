@@ -4,7 +4,7 @@
     "batch_size": 256,
     "colocate_gradients_with_ops": true,
     "dropout": 0.2,
-    "encoder_type": "bi",
+    "encoder_type": "uni",
     "eos": "</s>",
     "forget_bias": 1.0,
     "infer_batch_size": 64,
