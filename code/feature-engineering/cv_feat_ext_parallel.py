@@ -74,8 +74,12 @@ def calculate_edges(img):
 
 
 def calculate_edges_new(img):
-    edges = feature.canny(color.rgb2gray(img))
-    contours = measure.find_contours(edges, level=0)
+    edges = feature.canny(color.rgb2gray(img), sigma=3)
+    contours = measure.find_contours(edges, fully_connected='high')
+
+     # Check if any contours are found
+    if len(contours) == 0:
+        return np.zeros(7)  # Return an empty histogram if no contours are found
 
     # Calculating the length of each contour
     contour_lengths = [np.sum(np.sqrt(np.sum(np.diff(contour, axis=0)**2, axis=1))) for contour in contours]
@@ -143,15 +147,73 @@ def calculate_hue_histogram(img):
     hue_histogram, _ = np.histogram(hsv_img[:, :, 0], bins=7, range=(0, 180))
     return hue_histogram
 
-from sklearn.cluster import MiniBatchKMeans
+def calculate_hue_histogram_RGB(image):
+    def rgb_to_hue(r, g, b):
+        # Normalize RGB values
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+        max_val = max(r_norm, g_norm, b_norm)
+        min_val = min(r_norm, g_norm, b_norm)
+        delta = max_val - min_val
 
-def calculate_hue_histogram(img, n_colors=7, n_init=3):
-    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    pixels = hsv_img[:, :, 0].reshape(-1, 1)
-    kmeans = MiniBatchKMeans(n_clusters=n_colors, n_init=n_init)
-    labels = kmeans.fit_predict(pixels)
-    hue_histogram, _ = np.histogram(labels, bins=np.arange(0, n_colors+1))
-    return hue_histogram
+        if delta == 0:
+            return 0
+
+        if max_val == r_norm:
+            hue = ((g_norm - b_norm) / delta) % 6
+        elif max_val == g_norm:
+            hue = (b_norm - r_norm) / delta + 2
+        else:
+            hue = (r_norm - g_norm) / delta + 4
+
+        hue *= 60  # Convert to degrees on the color circle
+        if hue < 0:
+            hue += 360
+        
+        # Convert to range [0, 180]
+        hue /= 2
+        return hue
+
+    def hue_hist(image):
+        # Convert to float and split channels
+        image = image.astype(np.float32)
+        b, g, r = cv2.split(image)
+
+        # Calculate Hue for each pixel
+        hue_values = np.vectorize(rgb_to_hue)(r, g, b)
+
+        # Calculate histogram
+        hist, bin_edges = np.histogram(hue_values, bins=7, range=(0, 180))
+        return hist
+    
+    return hue_hist(image)
+
+# def calculate_hue_histogram_from_RGB(img):
+#     R, G, B = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+#     normR, normG, normB = R / 255.0, G / 255.0, B / 255.0
+#     Cmax = np.max([normR, normG, normB], axis=0)
+#     Cmin = np.min([normR, normG, normB], axis=0)
+#     delta = Cmax - Cmin
+
+#     # Calculate hue
+#     hue = np.zeros_like(delta)
+#     hue[Cmax == normR] = 60 * (((normG - normB) / delta[Cmax == normR]) % 6)
+#     hue[Cmax == normG] = 60 * (((normB - normR) / delta[Cmax == normG]) + 2)
+#     hue[Cmax == normB] = 60 * (((normR - normG) / delta[Cmax == normB]) + 4)
+#     hue[delta == 0] = 0
+
+#     # Calculate histogram
+#     hue_histogram, _ = np.histogram(hue, bins=7, range=(0, 180))
+#     return hue_histogram
+
+
+# from sklearn.cluster import MiniBatchKMeans
+# def calculate_hue_histogram(img, n_colors=7, n_init=3):
+#     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+#     pixels = hsv_img[:, :, 0].reshape(-1, 1)
+#     kmeans = MiniBatchKMeans(n_clusters=n_colors, n_init=n_init)
+#     labels = kmeans.fit_predict(pixels)
+#     hue_histogram, _ = np.histogram(labels, bins=np.arange(0, n_colors+1))
+#     return hue_histogram
 
 
 def process_image(data):
@@ -185,7 +247,7 @@ def process_image(data):
 
     contrast = calculate_contrast(gray)
 
-    edges = calculate_edges(image)
+    edges = calculate_edges_new(image)
     edge_len_features = {f'edge_length{i+1}': edges[i] for i in range(len(edges))}
     edge_angles = calculate_edge_angles(image)
     edge_angle_features = {f'edge_angle{i+1}': edge_angles[i] for i in range(len(edge_angles))}
@@ -200,6 +262,7 @@ def process_image(data):
     area_by_perim = calculate_area_by_perimeter(main_contour) if main_contour is not None else 0
 
     hue_histogram = calculate_hue_histogram(image)
+    # hue_histogram = calculate_hue_histogram_RGB(image)
     hue_features = {f'hue{i+1}': hue_histogram[i] for i in range(len(hue_histogram))}
 
     return {
