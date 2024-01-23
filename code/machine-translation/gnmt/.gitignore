@@ -4,4 +4,5 @@ bazel-out
 bazel-testlogs
 
 wmt16_de_en
+wmt16_de_en_paper
 data
