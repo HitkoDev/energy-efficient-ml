@@ -50,7 +50,7 @@ def safe_exp(value):
 
 def print_time(s, start_time):
   """Take a start time, print elapsed duration, and return a new time."""
-  print("%s, time %ds, %s." % (s, (time.time() - start_time), time.ctime()))
+  print("%s, time %.3fms, %s." % (s, (time.time() - start_time) * 1000, time.ctime()))
   sys.stdout.flush()
   return time.time()
 
