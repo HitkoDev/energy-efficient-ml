@@ -31,6 +31,8 @@ from .utils import evaluation_utils
 from .utils import misc_utils as utils
 from .utils import vocab_utils
 
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
+
 utils.check_tensorflow_version()
 
 FLAGS = None

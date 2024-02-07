@@ -5,15 +5,25 @@ inputs=("newstest2009.tok"  "newstest2010.tok"  "newstest2011.tok"  "newstest201
 
 for model in ${models[*]}; do
     for input in ${inputs[*]}; do
-        mkdir -p ./translated/${model}
+        mkdir -p ./translated_best/${model}
         TF_CPP_MIN_LOG_LEVEL=3 python -m gnmt.nmt \
             --src=en --tgt=de \
             --out_dir=./out/${model}/best_bleu \
             --infer_mode beam_search --beam_width 10 \
             --infer_batch_size 1024 \
             --vocab_prefix=./gnmt/wmt16_de_en/vocab.bpe.32000  \
-            --inference_input_file=./gnmt/wmt16_de_en/${input}.bpe.32000.de \
+            --inference_input_file=./gnmt/wmt16_de_en/${input}.bpe.32000.en \
+            --inference_output_file=./translated_best/${model}/${input} \
+            --inference_ref_file=./gnmt/wmt16_de_en/${input}.bpe.32000.de > ./translated_best/${model}/${input}.log
+        mkdir -p ./translated/${model}
+        TF_CPP_MIN_LOG_LEVEL=3 python -m gnmt.nmt \
+            --src=en --tgt=de \
+            --out_dir=./out/${model} \
+            --infer_mode beam_search --beam_width 10 \
+            --infer_batch_size 1024 \
+            --vocab_prefix=./gnmt/wmt16_de_en/vocab.bpe.32000  \
+            --inference_input_file=./gnmt/wmt16_de_en/${input}.bpe.32000.en \
             --inference_output_file=./translated/${model}/${input} \
-            --inference_ref_file=./gnmt/wmt16_de_en/${input}.bpe.32000.en > ./translated/${model}/${input}.log
+            --inference_ref_file=./gnmt/wmt16_de_en/${input}.bpe.32000.de > ./translated/${model}/${input}.log
     done
 done
