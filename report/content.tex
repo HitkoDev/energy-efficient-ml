@@ -23,8 +23,7 @@ Based on the original article, the models were trained on \textquote*[{\cite[p. 
     \label{fig:tf-nmt_paper_training}
 \end{figure}
 
-Because training the underlying NMT models isn't the primary focus of the original article, we decided to train the models following the standard WMT English-German training described in Tensorflow-NMT and train the four models used in the paper: 3\_layer, gnmt\_2\_layer, gnmt\_4\_layer, and gnmt\_8\_layer. We included hyperparameters and scripts we used to prepare both datasets and train our models with the code. We were unable to determine what the remaining 11 models used by the original authors were, as the original article simply states that they used 15 \textquote*[{\cite[p. 13]{marco2019optimizing}}]{models
-of varying sizes and architectures} based on Tensorflow-NMT in the model selection step.
+Because training the underlying NMT models isn't the primary focus of the original article, we decided to train the models following the standard WMT English-German training described in Tensorflow-NMT and train the four models used in the paper: 3\_layer, gnmt\_2\_layer, gnmt\_4\_layer, and gnmt\_8\_layer. We included hyperparameters and scripts we used to prepare both datasets and train our models with the code. We were unable to determine what the remaining 11 models used by the original authors were, as the original article simply states that they used 15 \textquote*[{\cite[p. 13]{marco2019optimizing}}]{models of varying sizes and architectures} based on Tensorflow-NMT in the model selection step.
 
 % We replicated the model selection algorithm, but without knowing what models the original authors considered in the model selection step, we weren't able to replicate the results for that part.
 
@@ -34,7 +33,7 @@ of varying sizes and architectures} based on Tensorflow-NMT in the model selecti
 
 
 \subsubsection{Scope of Reproducibility}
- In this work, we aim to reproduce the findings of the paper "Optimizing Deep Learning Inference on Embedded Systems Through Adaptive Model Selection"\supercite{marco2019optimizing}. This paper presents/introduces ... premodel ... knn .. CNN .. embedded systems.
+In this work, we aim to reproduce the findings of the paper "Optimizing Deep Learning Inference on Embedded Systems Through Adaptive Model Selection"\supercite{marco2019optimizing}. This paper presents/introduces ... premodel ... knn .. CNN .. embedded systems.
 
 \subsubsection{Methodology}
 TBD
@@ -59,18 +58,18 @@ here is intro
 \section{Scope of Reproducibility}
 Authors have the following claims:
 \begin{itemize}
-    \item \textbf{Claim 1: image classification top-1 accuracy improvement.} 
-    
-    The authors claim that ...
-    
+    \item \textbf{Claim 1: image classification top-1 accuracy improvement.}
+
+          The authors claim that ...
+
     \item \textbf{Claim 2: image classification reduction in inference time.}
 
-    The authors claim that ...
-    
-    \item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.} 
+          The authors claim that ...
 
-    The authors claim ...
-    
+    \item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
+
+          The authors claim ...
+
 \end{itemize}
 
 
@@ -110,25 +109,25 @@ Our correlation analysis revealed significant differences from the original stud
 To effectively communicate our findings, we have included a heatmap of the Pearson correlation matrix of the features we computed \ref{fig:correlation_matrix}. This visualization provides an intuitive understanding of the relationships between different features in our implementation.
 
 \begin{figure}[h]
-\centering
-\includegraphics[width=0.75\textwidth]{report/figures/cv_corr_matrix.pdf}
-\caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
-\label{fig:correlation_matrix}
+    \centering
+    \includegraphics[width=0.75\textwidth]{report/figures/cv_corr_matrix.pdf}
+    \caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
+    \label{fig:correlation_matrix}
 \end{figure}
 
 It's important to note that these differences in correlations might influence the model's performance and generalizability, and our observations suggest areas where further research and clarification from the original authors might be beneficial.
 
 \begin{table}[h]
-\centering
-\caption{Correlation values (absolute) of removed features to the kept ones for image classification.}
-\begin{tabular}{lll}
-\hline
-\textbf{Kept Feature} & \textbf{Removed Feature} & \textbf{Correl.} \\ \hline
-avg\_brightness       & brightness\_rms         & 0.98             \\
-                      & avg\_perc\_brightness   & 0.98             \\
-                      & perc\_brightness\_rms   & 0.96             \\
-edge\_angle1          & edge\_angle[2-7]       & 0.92 - 0.95      \\ \hline
-\end{tabular}
+    \centering
+    \caption{Correlation values (absolute) of removed features to the kept ones for image classification.}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Kept Feature} & \textbf{Removed Feature} & \textbf{Correl.} \\ \hline
+        avg\_brightness       & brightness\_rms          & 0.98             \\
+                              & avg\_perc\_brightness    & 0.98             \\
+                              & perc\_brightness\_rms    & 0.96             \\
+        edge\_angle1          & edge\_angle[2-7]         & 0.92 - 0.95      \\ \hline
+    \end{tabular}
 \end{table}
 
 
@@ -151,10 +150,10 @@ Consistent with the original paper, we incorporated a BoW representation for eac
 To illustrate the feature correlations in our implementation, we included a heatmap of the Pearson correlation matrix, as shown below:
 
 \begin{figure}[h]
-\centering
-\includegraphics[width=0.75\textwidth]{report/figures/text_corr_matrix.pdf}
-\caption{Heatmap of the Pearson correlation matrix for the features in our machine translation feature engineering.}
-\label{fig:nlp_correlation_matrix}
+    \centering
+    \includegraphics[width=0.75\textwidth]{report/figures/text_corr_matrix.pdf}
+    \caption{Heatmap of the Pearson correlation matrix for the features in our machine translation feature engineering.}
+    \label{fig:nlp_correlation_matrix}
 \end{figure}
 
 This heatmap provides a visual representation of the relationships between different features in our MT feature engineering process, allowing for a direct comparison with the original study's findings.
@@ -178,7 +177,7 @@ This heatmap provides a visual representation of the relationships between diffe
 %        \subsubsection{Base model}
 %        \subsubsection{Feature engineering}
 %        \subsubsection{Premodel}
-    
+
 
 
 \section{Results}
