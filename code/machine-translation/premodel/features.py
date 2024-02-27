@@ -87,7 +87,7 @@ meta_file = (
     f"{os.path.dirname(__file__)}/../translated/{os.path.basename(file)[:-3]}.csv"
 )
 target_file = f"{os.path.dirname(__file__)}/data/{os.path.basename(file)}"
-os.makedirs(os.path.dirname(target_file))
+os.makedirs(os.path.dirname(target_file), exist_ok=True)
 meta = pd.read_csv(meta_file)
 best = meta["best_model"].to_list()
 
@@ -119,6 +119,7 @@ for train, test in kf.split(data):
 
     # Convert to DataFrame and save to CSV
     df = pd.DataFrame(features_list)
+    df["sentence"] = train
     df.to_csv(f"{target_file}_split_{i}_train.csv", index=False)
 
     # Extract features from test sentences using trained BoW model
@@ -129,5 +130,6 @@ for train, test in kf.split(data):
 
     # Convert to DataFrame and save to CSV
     df = pd.DataFrame(features_list)
+    df["sentence"] = test
     df.to_csv(f"{target_file}_split_{i}_test.csv", index=False)
     i += 1
