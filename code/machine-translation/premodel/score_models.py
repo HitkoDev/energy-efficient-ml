@@ -59,15 +59,15 @@ for file in glob(f"{base_dir}/*.tok.en"):
             sents[i][f"{k}_rouge"] = ro_s
             sents[i][f"{k}_f1"] = f1_s
             sents[i][f"{k}_dur"] = dur
-            models[i].append((f1_s, bl_s, ro_s, k, dur))
-            models_ps[i].append((f1_s**2 / dur, bl_s**2 / dur, ro_s**2 / dur, k, dur))
+            models[i].append((bl_s, ro_s, f1_s, k, dur))
+            models_ps[i].append((bl_s**2 / dur, ro_s**2 / dur, f1_s**2 / dur, k, dur))
 
     # Determine best model and oracle
     for i, m in enumerate(models):
-        m.sort(key=lambda x: (x[0], x[1], x[2]))
+        m.sort(key=lambda x: x[0])
         oracle = m[-1][3]
         sents[i]["oracle_dur"] = m[-1][4]
-        models_ps[i].sort(key=lambda x: (x[0], x[1], x[2]))
+        models_ps[i].sort(key=lambda x: x[0])
         sents[i]["best_model"] = models_ps[i][-1][3]
         for k in list(sents[i].keys()):
             if oracle in k:
