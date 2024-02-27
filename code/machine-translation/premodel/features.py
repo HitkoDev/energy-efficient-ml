@@ -1,7 +1,6 @@
 import os
 import string
 from collections import Counter
-from glob import glob
 
 import pandas as pd
 import spacy
@@ -104,9 +103,9 @@ data = list(zip(tok_sentences, bpe_sentences, best))
 
 kf = KFold(n_splits=10)
 i = 0
-for train, test in kf.split(data):
+for train, test in kf.split(data, best):
     tok_sentences, bpe_sentences, best = zip(*[data[i] for i in train])
-    test_tok_sentences, test_bpe_sentences, _ = zip(*[data[i] for i in test])
+    test_tok_sentences, test_bpe_sentences, test_best = zip(*[data[i] for i in test])
 
     # Create a BoW model based on the original sentences from the train dataset
     bow_vectorizer, kbest = create_bow_model(tok_sentences, best)
@@ -120,6 +119,7 @@ for train, test in kf.split(data):
     # Convert to DataFrame and save to CSV
     df = pd.DataFrame(features_list)
     df["sentence"] = train
+    df["best_model"] = best
     df.to_csv(f"{target_file}_split_{i}_train.csv", index=False)
 
     # Extract features from test sentences using trained BoW model
@@ -131,5 +131,6 @@ for train, test in kf.split(data):
     # Convert to DataFrame and save to CSV
     df = pd.DataFrame(features_list)
     df["sentence"] = test
+    df["best_model"] = test_best
     df.to_csv(f"{target_file}_split_{i}_test.csv", index=False)
     i += 1
