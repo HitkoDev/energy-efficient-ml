@@ -65,8 +65,8 @@ def extract_features(sentence, bpe_sentence, bow_vectorizer, kbest):
         "avg_word_length": avg_word_length,
     }
 
-    bow = bow_vectorizer.transform([sentence]).toarray()[0]
-    bow = list(kbest.transform([bow]))[0]
+    bow = bow_vectorizer.transform([sentence])
+    bow = kbest.transform(bow).toarray()[0]
     for i, val in enumerate(bow):
         feature_dict[f"bow_{i}"] = val
 
