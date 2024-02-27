@@ -8,12 +8,13 @@ from nltk.corpus import wordnet as wn
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 
 
 def create_bow_model(sentences, best):
     vectorizer = CountVectorizer()
     tokenized = vectorizer.fit_transform(sentences)
+    # chi2 reduction on BoW
     kbest = SelectKBest(score_func=chi2, k=1500)
     kbest.fit_transform(tokenized, best)
     return vectorizer, kbest
@@ -101,7 +102,7 @@ assert len(tok_sentences) == len(bpe_sentences)
 
 data = list(zip(tok_sentences, bpe_sentences, best))
 
-kf = KFold(n_splits=10)
+kf = StratifiedKFold(n_splits=10)
 i = 0
 for train, test in kf.split(data, best):
     tok_sentences, bpe_sentences, best = zip(*[data[i] for i in train])
