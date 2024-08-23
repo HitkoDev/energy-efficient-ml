@@ -32,18 +32,18 @@ Here we attempt to reproduce their work on the two DNN domains described in the 
 \section{Scope of Reproducibility}
 Authors have the following claims:
 \begin{itemize}
-  \item \textbf{Claim 1: image classification top-1 accuracy improvement.}
-
-        The authors claim that, using the premodel selection pipeline, we can surpass the accuracy of any one of pretrained networks. They state an improvement of 7.52\% compared to the most-accurate single deep learning model.
-
-  \item \textbf{Claim 2: image classification reduction in inference time.}
-
-        The authors claim that using the premodels, we can reduce the inference time by more than half ("1.8x reduction in inference time") that of using only the most accurate model - ResNet152.
-
-  \item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
-
-        The authors claim a 1.34x reduction in inference time without a significant loss in accuracy.
-
+	\item \textbf{Claim 1: image classification top-1 accuracy improvement.}
+	      
+	      The authors claim that, using the premodel selection pipeline, we can surpass the accuracy of any one of pretrained networks. They state an improvement of 7.52\% compared to the most-accurate single deep learning model.
+	      
+	\item \textbf{Claim 2: image classification reduction in inference time.}
+	      
+	      The authors claim that using the premodels, we can reduce the inference time by more than half ("1.8x reduction in inference time") that of using only the most accurate model - ResNet152.
+	      
+	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
+	      
+	      The authors claim a 1.34x reduction in inference time without a significant loss in accuracy.
+	      
 \end{itemize}
 
 
@@ -70,25 +70,25 @@ In the original paper, the premodel is constructed with three consecutive simple
 For comparison, runtime and accuracy as they report it is shown in Figure \ref{fig:11a_orig}, while our results are shown in Figure \ref{fig:11a_ours}. Some of these differences could be attributed to the lack of clear information on what features the authors used, and how they were extracted or augmented.
 
 \begin{figure}
-  \centering
-  \includegraphics[width=0.7\textwidth]{report/figures/original_premodels.png}
-  \caption{Premodel results in the original article. Premodel combinations show a large difference in accuracies and only small variation in time.}
-  \label{fig:11a_orig}
+	\centering
+	\includegraphics[width=0.7\textwidth]{report/figures/original_premodels.png}
+	\caption{Premodel results in the original article. Premodel combinations show a large difference in accuracies and only small variation in time.}
+	\label{fig:11a_orig}
 \end{figure}
 \begin{figure}
-  \begin{subfigure}{.5\textwidth}
-    \centering
-    \includegraphics[width=0.99\textwidth]{report/figures/premodel_orderedByAcc_1000.png}
-    \caption{Premodels trained on 1000 images}
-  \end{subfigure}
-  \begin{subfigure}{.5\textwidth}
-    \includegraphics[width=0.99\textwidth]{report/figures/premodel_orderedByAcc_5000.png}
-    \caption{Premodels trained on 5000 images}
-  \end{subfigure}
-  \caption{Our premodel results. Both accuracy and time show a large variation between different premodel combinations. Notably, large differences can arise from small changes such as number of training instances of the premodels. Less trained premodels are worse in well-distributing instances and result in lower inference speed.}
-  \label{fig:11a_ours}
-
-
+	\begin{subfigure}{.5\textwidth}
+		\centering
+		\includegraphics[width=0.99\textwidth]{report/figures/premodel_orderedByAcc_1000.png}
+		\caption{Premodels trained on 1000 images}
+	\end{subfigure}
+	\begin{subfigure}{.5\textwidth}
+		\includegraphics[width=0.99\textwidth]{report/figures/premodel_orderedByAcc_5000.png}
+		\caption{Premodels trained on 5000 images}
+	\end{subfigure}
+	\caption{Our premodel results. Both accuracy and time show a large variation between different premodel combinations. Notably, large differences can arise from small changes such as number of training instances of the premodels. Less trained premodels are worse in well-distributing instances and result in lower inference speed.}
+	\label{fig:11a_ours}
+	
+	
 \end{figure}
 
 \subsection{Machine translation}
@@ -100,27 +100,35 @@ In the original article, the authors describe using 15 Tensorflow-NMT~\cite{luon
 Based on the original article, the models were trained on \textquote*[{\cite[p. 13]{marco2019optimizing}}]{WMT09-WMT14 English-German newstest dataset}. However, when we tried to train Tensorflow-NMT models on that dataset, we were unable to reproduce the results, or even achieve any meaningful training, as shown in \figurename~\ref{fig:tf-nmt_paper_training}.
 
 \begin{figure}[h]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/tf-nmt_paper_training.pdf}
-  \caption{Comparison of training metrics when training the same Tensorflow-NMT model on WMT English-German newstest dataset (paper) and the whole WMT English-German dataset used by the Tensorflow-NMT authors (TF-NMT). It's clear that, at least without significant changes to the hyperparameters, the newstest dataset isn't sufficient to train Tensorflow-NMT models.}
-  \label{fig:tf-nmt_paper_training}
+	\centering
+	\includegraphics[width=0.75\textwidth]{figures/tf-nmt_paper_training.pdf}
+	\caption{Comparison of training metrics when training the same Tensorflow-NMT model on WMT English-German newstest dataset (paper) and the whole WMT English-German dataset used by the Tensorflow-NMT authors (TF-NMT). It's clear that, at least without significant changes to the hyperparameters, the newstest dataset isn't sufficient to train Tensorflow-NMT models.}
+	\label{fig:tf-nmt_paper_training}
 \end{figure}
 
 Because training the underlying NMT models isn't the primary focus of the original article, we decided to train the models following the standard WMT English-German training described in Tensorflow-NMT and train the four models used in the paper: 3\_layer, gnmt\_2\_layer, gnmt\_4\_layer, and gnmt\_8\_layer. We included hyperparameters and scripts we used to prepare both datasets and train our models with the code. We were unable to determine what the remaining 11 models used by the original authors were, as the original article simply states that they used 15 \textquote*[{\cite[p. 13]{marco2019optimizing}}]{models of varying sizes and architectures} based on Tensorflow-NMT in the model selection step.
 
-Figure \ref{fig:nlp_scores} presents the BLEU, ROUGE, and F1 scores for the evaluated models. While the overall accuracy is somewhat lower compared to the original article (\cite{marco2019optimizing}, Figure 10c), the our 3\_layer model notably outperforms theirs, achieving a significantly higher scores than reported in the original study.
+\figurename~\ref{fig:nlp_scores} presents inference times along with the BLEU, ROUGE, and F1 scores for the evaluated models. While the overall accuracy is somewhat lower compared to the original article (\cite{marco2019optimizing}, Figure 10c), our 3\_layer model notably outperforms theirs, achieving a significantly higher scores than reported in the original study.
 
 \begin{figure}[ht]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/ml_inf_score.pdf}
-  \caption{Comparison of BLEU, ROUGE, and F1 scores for different models.}
-  \label{fig:nlp_scores}
+	\centering
+	\includegraphics[width=0.45\textwidth]{figures/ml_inf_time.pdf}\quad
+	\includegraphics[width=0.45\textwidth]{figures/ml_inf_score.pdf}
+	\caption{Inference times and scores of different models.}
+	\label{fig:nlp_scores}
 \end{figure}
 
 \subsubsection{Premodel}
-For the premodel for the machine translation part, the authors propose simple classifiers (KNN, DT, NB, SVM), either as a single multi-class classifier or a series of multiple binary classifiers of the same type. We also tested other classifiers available in the Scikit-learn library, using 10-fold cross-validation. However, as with the NMT models, the dataset mentioned in the original paper simply wasn't enough to get any improvement over the baseline. While we were able to train NMT models on the entire WMT dataset, we were unable to do so for the premodel as the time complexity for some of the models used in the paper is \(O(n^2)\) or even \(O(n^3)\).
+For the premodel for the machine translation part, the authors propose simple classifiers (KNN, DT, NB, SVM), either as a single multi-class classifier or a series of multiple binary classifiers of the same type. We also tested other classifiers available in the Scikit-learn library as it was unclear what the exact classifier implementations used by the original authors were, using 10-fold cross-validation. However, as with the NMT models, the dataset mentioned in the original paper simply wasn't enough to get any improvement over the baseline (\figurename~\ref{fig:nlp_premodels}). While we were able to train NMT models on the entire WMT dataset, we were unable to do so for the premodel as the time complexity for some of the models used in the paper is \(O(n^2)\) or even \(O(n^3)\).
 
 It is unclear from the paper how the authors achieved their results, what part of the dataset they used, or what hyperparameters they used for each premodel in order to achieve their results. Therefore, we cannot directly compare our results to theirs, even though we did notice some improvement in inference time and F1 score comparable with Figure 11 in the original paper.
+
+\begin{figure}[ht]
+	\centering
+	\includegraphics[width=0.75\textwidth]{figures/ml_inf_premodel.pdf}
+	\caption{Comparison of different premodels. While there is improvement in inference time, the improvement in F1 score is only marginal, and much further from that reported by the original authors.}
+	\label{fig:nlp_premodels}
+\end{figure}
 
 % We replicated the model selection algorithm, but without knowing what models the original authors considered in the model selection step, we weren't able to replicate the results for that part.
 
@@ -151,25 +159,25 @@ Our correlation analysis revealed significant differences from the original stud
 To effectively communicate our findings, we have included a heatmap of the Pearson correlation matrix of the features we computed \ref{fig:correlation_matrix}. This visualisation provides an intuitive understanding of the relationships between different features in our implementation.
 
 \begin{figure}[h]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/cv_corr_matrix.pdf}
-  \caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
-  \label{fig:correlation_matrix}
+	\centering
+	\includegraphics[width=0.75\textwidth]{figures/cv_corr_matrix.pdf}
+	\caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
+	\label{fig:correlation_matrix}
 \end{figure}
 
 It's important to note that these differences in correlations might influence the model's performance and generalizability, and our observations suggest areas where further research and clarification from the original authors might be beneficial.
 
 \begin{table}[h]
-  \centering
-  \caption{Correlation values (absolute) of removed features to the kept ones for image classification.}
-  \begin{tabular}{lll}
-    \hline
-    \textbf{Kept Feature} & \textbf{Removed Feature} & \textbf{Correl.} \\ \hline
-    avg\_brightness       & brightness\_rms          & 0.98             \\
-                          & avg\_perc\_brightness    & 0.98             \\
-                          & perc\_brightness\_rms    & 0.96             \\
-    edge\_angle1          & edge\_angle[2-7]         & 0.92 - 0.95      \\ \hline
-  \end{tabular}
+	\centering
+	\caption{Correlation values (absolute) of removed features to the kept ones for image classification.}
+	\begin{tabular}{lll}
+		\hline
+		\textbf{Kept Feature} & \textbf{Removed Feature} & \textbf{Correl.} \\ \hline
+		avg\_brightness       & brightness\_rms          & 0.98             \\
+		                      & avg\_perc\_brightness    & 0.98             \\
+		                      & perc\_brightness\_rms    & 0.96             \\
+		edge\_angle1          & edge\_angle[2-7]         & 0.92 - 0.95      \\ \hline
+	\end{tabular}
 \end{table}
 
 
@@ -193,10 +201,10 @@ Consistent with the original paper, we incorporated a BoW representation for eac
 To illustrate the feature correlations in our implementation, we included a heatmap of the Pearson correlation matrix, as shown below:
 
 \begin{figure}[h]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/text_corr_matrix.pdf}
-  \caption{Heatmap of the Pearson correlation matrix for the features in our machine translation feature engineering.}
-  \label{fig:nlp_correlation_matrix}
+	\centering
+	\includegraphics[width=0.75\textwidth]{figures/text_corr_matrix.pdf}
+	\caption{Heatmap of the Pearson correlation matrix for the features in our machine translation feature engineering.}
+	\label{fig:nlp_correlation_matrix}
 \end{figure}
 
 This heatmap provides a visual representation of the relationships between different features in our MT feature engineering process, allowing for a direct comparison with the original study's findings.
@@ -226,18 +234,18 @@ When reporting accuracies for premodels, we report accuracy compared to oracle m
 
 Regarding original authors' claims:
 \begin{itemize}
-  \item \textbf{Claim 1: image classification top-1 accuracy improvement.}
-
-        Using this premodel pipeline, we succesfully surpassed best models with same best premodel sequence.
-
-  \item \textbf{Claim 2: image classification reduction in inference time.}
-
-        Using any premodel combination significantly speeds up image classification, as opposed to always using the "strongest" model. Notably, we observed even larger speed-up that expected, from almost 3x with the worst premodel combination up to almost 7x.
-
-  \item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
-
-        While different premodels did reduce inference time close to what has been reported in the original paper, they didn't show any improvement in accuracy over the baseline 3\_layer model due to a large number of misclassified sentences. However, it's worth noting that our 3\_layer model achieves marginally worse overall performance than gnmt\_8\_layer model, and since the models are much more similar in architecture than those used for image classification we weren't expecting to see any major improvement.
-
+	\item \textbf{Claim 1: image classification top-1 accuracy improvement.}
+	      
+	      Using this premodel pipeline, we succesfully surpassed best models with same best premodel sequence.
+	      
+	\item \textbf{Claim 2: image classification reduction in inference time.}
+	      
+	      Using any premodel combination significantly speeds up image classification, as opposed to always using the "strongest" model. Notably, we observed even larger speed-up that expected, from almost 3x with the worst premodel combination up to almost 7x.
+	      
+	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
+	      
+	      While different premodels did reduce inference time close to what has been reported in the original paper, they didn't show any improvement in accuracy over the baseline 3\_layer model due to a large number of misclassified sentences. However, it's worth noting that our 3\_layer model achieves marginally worse overall performance than gnmt\_8\_layer model, and since the models are much more similar in architecture than those used for image classification we weren't expecting to see any major improvement.
+	      
 \end{itemize}
 
 
