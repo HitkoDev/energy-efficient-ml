@@ -13,6 +13,8 @@ base_dir = f"{os.path.dirname(__file__)}/../gnmt/wmt16_de_en"
 
 pm15 = []
 pm16 = []
+premodels = {}
+premodels_l = 0
 
 for file in glob(f"{base_dir}/*.tok.en"):
     basename = os.path.basename(file)[:-3]
@@ -24,30 +26,41 @@ for file in glob(f"{base_dir}/*.tok.en"):
     sents = []
     models = []
     models_ps = []
-    for tr in glob(f"{os.path.dirname(__file__)}/../translated/*/{basename}"):
-        duration = pd.read_csv(f"{os.path.dirname(tr)}/duration.csv")
+    for tr in glob(f"{os.path.dirname(__file__)}/../translated_best/*/{basename}"):
+        log = tr+'.log'
+        dur = 1
+        with open(log, 'r', encoding="utf-8") as lg:
+            for line in lg:
+                m = re.search('num sentences (\d+), .*? time ([\d\.]+)ms', line)
+                if m:
+                    dur = float(m.group(2)) / float(m.group(1))
         k = os.path.basename(os.path.dirname(tr))
+        if "4_layer" in k:
+            continue
         with open(
             labels_file_path, "r", newline="\n", encoding="utf-8"
         ) as file_labels, open(tr, "r", encoding="utf-8") as file_tr:
             tok_sentences = [line.strip() for line in file_labels]
             tr_sentences = [re.sub("@@ ", "", line.strip()) for line in file_tr]
-        dur = duration[basename][0] / len(tok_sentences) / 1000
 
         for i, (l, t) in enumerate(zip(tok_sentences, tr_sentences)):
-            bl_s = bleu_scorer.sentence_score(
-                hypothesis=t,
-                references=[l],
-            ).score
-            ro_s = (
-                rouge_scorer.get_scores(
-                    hyps=t,
-                    refs=l,
-                )[0][
-                    "rouge-l"
-                ]["f"]
-                * 100
-            )
+            try:
+                bl_s = bleu_scorer.sentence_score(
+                    hypothesis=t,
+                    references=[l],
+                ).score
+                ro_s = (
+                    rouge_scorer.get_scores(
+                        hyps=t,
+                        refs=l,
+                    )[0][
+                        "rouge-l"
+                    ]["f"]
+                    * 100
+                )
+            except:
+                bl_s = 0
+                ro_s = 0
             f1_s = 2 * ro_s * bl_s
             if ro_s + bl_s > 0:
                 f1_s = f1_s / (ro_s + bl_s)
@@ -76,13 +89,18 @@ for file in glob(f"{base_dir}/*.tok.en"):
     if len(sents) > 0:
         score = {}
         for k in sents[0]:
-            if "bleu" in k or "f1" in k or "rouge" in k:
+            if "bleu" in k or "f1" in k or "rouge" in k or "dur" in k:
                 score[k] = 0
+                if k not in premodels:
+                    premodels[k] = 0
 
         for v in sents:
             for k in v:
-                if "bleu" in k or "f1" in k or "rouge" in k:
+                if "bleu" in k or "f1" in k or "rouge" in k or "dur" in k:
                     score[k] += v[k]
+                    premodels[k] += v[k]
+
+        premodels_l += len(sents)
 
         for k in score:
             score[k] /= len(sents)
@@ -101,8 +119,17 @@ for file in glob(f"{base_dir}/*.tok.en"):
 
         df = pd.DataFrame(sents)
         df.to_csv(
-            f"{os.path.dirname(__file__)}/../translated/{basename}.csv", index=False
+            f"{os.path.dirname(__file__)}/../translated_best/{basename}.csv", index=False
         )
 
+for k in premodels:
+    premodels[k] /= premodels_l
+for k in premodels:
+    if "f1" in k:
+        b = k.replace("f1", "bleu")
+        r = k.replace("f1", "rouge")
+        premodels[k] = 2 * premodels[b] * premodels[r] / (premodels[b] + premodels[r])
+print('overall', premodels)
+
 df = pd.DataFrame(pm15 + pm16)
-df.to_csv(f"{os.path.dirname(__file__)}/../translated/premodels.tok.csv", index=False)
+df.to_csv(f"{os.path.dirname(__file__)}/../translated_best/premodels.tok.csv", index=False)
