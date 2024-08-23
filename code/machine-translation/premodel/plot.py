@@ -92,6 +92,7 @@ overall["our_dur"] = best["dur"]
 overall["our_f1"] = best["f1"]
 
 fig, ax = plt.subplots()
+fig.set_figheight(3)
 ax2 = ax.twinx()
 
 species = [k for k, v in items]
@@ -105,7 +106,7 @@ ax.invert_xaxis()  # labels read top-to-bottom
 ax.set_ylabel("Inference (ms)")
 line2 = ax2.plot(x_pos, f1s, "-o", color="black", label="F1")
 ax2.set_ylabel("F1")
-ax.legend(handles=[line1, line2[0]])
+ax.legend(handles=[line1, line2[0]], loc="upper left", ncols=2)
 
 plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
 
@@ -126,6 +127,7 @@ width = 0.25  # the width of the bars
 multiplier = 0
 
 fig, ax = plt.subplots()
+fig.set_figheight(3)
 
 for attribute, measurement in penguin_means.items():
     offset = width * multiplier
@@ -142,6 +144,7 @@ fig.tight_layout()
 plt.show()
 
 fig, ax = plt.subplots()
+fig.set_figheight(3)
 
 x_pos = np.arange(len(species))[::-1]
 times = [overall["%s_dur" % v] for v in species]
