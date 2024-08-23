@@ -51,11 +51,11 @@ for i in range(n):
 
     train = pd.read_csv(train_file)
 
-    """locs = [train[train["best_model"] == f] for f in train["best_model"].unique()]
+    locs = [train[train["best_model"] == f] for f in train["best_model"].unique()]
     mx = max(v.shape[0] for v in locs)
     for v in locs:
         for z in range(math.floor(mx / v.shape[0]) - 1):
-            train = pd.concat([train, v])"""
+            train = pd.concat([train, v])
 
     test = pd.read_csv(test_file)
 
