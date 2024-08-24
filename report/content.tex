@@ -8,14 +8,14 @@ In this work, we aim to reproduce the findings of the paper "Optimizing Deep Lea
 We discovered a partial implementation in an archived GitHub repository, which only covered the computer vision aspect of the study. However, this was insufficient for full reproduction of the results, leading us to implement the majority of the code from scratch.
 
 \subsubsection{Results}
-Our results differ greatly from the original article, due to their inability to provide specific information about the methods and decisions made in the implementation phase. Although we were able to achieve similar correlation in the first feature engineering part, the differences in subsequent parts grew quickly. Despite achieving similar top-end performance in the premodel and image classification part, the accuracy of NLP models did not match our expectations. Thus we unable to fully reproduce the results of the original article.
+Our results differ significantly from the original article, due to their inability to provide specific information about the methods and decisions made in the implementation phase. Although we were able to achieve similar correlation in the feature engineering and premodel parts, the differences in subsequent parts grew quickly. Despite achieving similar top-end performance in the premodel and image classification part, the accuracy of NLP models did not match our expectations. Thus we unable to fully reproduce the results of the original article.
 
 \subsubsection{What was easy}
 %The easiest task was writing the code itself - the source idea is relatively simple to implement.
 Implementing the core idea in code was relatively straightforward, as the foundational concepts were clear and simple to execute.
 
 \subsubsection{What was difficult}
-It was very difficult to understand what values and procedures the original authors used to procure their results for model selection, feature engineering and model training. Specifically, the lack of explicitly stated methods used for feature engineering and only referencing an overview study of the subject. Furthermore, for premodel results, the only reported accuracy values were in comparison to oracle performance, which was stated nowhere in the original article.
+It was very difficult to understand what values and procedures the original authors used to procure their results for model selection, feature engineering and model training. Specifically, the lack of explicitly stated methods used for feature engineering and only referencing an overview study of the subject. Furthermore, for premodel results, the only reported accuracy values were in comparison to oracle performance, which was stated nowhere in the original article. 
 
 \subsubsection{Communication with original authors}
 We attempted to contact the original authors about their results over email, listed in their original article, however no response was received.
@@ -97,7 +97,7 @@ For comparison, runtime and accuracy as they report it is shown in Figure \ref{f
 
 In the original article, the authors describe using 15 Tensorflow-NMT~\cite{luong17} models trained on WMT English-German dataset. Unlike the models used in the image classification part, pretrained models used for the machine translation part are not available online. In the original article, the authors mention number of layers and use of gnmt attention as the main difference between the models, but don't provide any other hyperparameters, therefore we assume they match the standard hyperparameters provided by Tensorflow-NMT.
 
-Based on the original article, the models were trained on \textquote*[{\cite[p. 13]{marco2019optimizing}}]{WMT09-WMT14 English-German newstest dataset}. However, when we tried to train Tensorflow-NMT models on that dataset, we were unable to reproduce the results, or even achieve any meaningful training, as shown in \figurename~\ref{fig:tf-nmt_paper_training}.
+Based on the original article, the models were trained on \textquote*[{\cite[p. 13]{marco2019optimizing}}]{WMT09-WMT14 English-German newstest dataset}. However, when we attempted to train Tensorflow-NMT models on that dataset, we were unable to reproduce the results, or even achieve any meaningful training, as shown in \figurename~\ref{fig:tf-nmt_paper_training}.
 
 \begin{figure}[h]
 	\centering
@@ -183,7 +183,7 @@ It's important to note that these differences in correlations might influence th
 
 
 \subsubsection{Machine translation}
-For the machine translation part we got much more similar results for the feature extractio part, despite a few problems.
+For the machine translation part we got much more similar results than the feature extraction part, despite a few problems.
 
 \paragraph{Feature Selection and Challenges}
 In our replication of the machine translation case study, we faced challenges primarily related to data and feature specification discrepancies in the original study. The original paper's dataset reference indicated 5k sentences, while the actual dataset contained 4.5 million samples. This discrepancy significantly influenced our approach to feature extraction and premodel training.
