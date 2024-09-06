@@ -5,7 +5,7 @@
 #  - For a successful replication, it should be prefixed with "[Re]"
 #  - For a failed replication, it should be prefixed with "[¬Re]"
 #  - For other article types, no instruction (but please, not too long)
-title: "ReScience (R)evolution"
+title: "[Re] Reproducibility study of 'Optimizing Deep Learning Inference on Embedded Systems Through Adaptive Model Selection'"
 
 # List of authors with name, orcid number, email and affiliation
 # Affiliation "*" means contact author (required even for single-authored papers)
@@ -34,7 +34,7 @@ affiliations:
 
 
 # List of keywords (adding the programming language might be a good idea)
-keywords: rescience c, rescience x
+keywords: deep learning, embedded systems, model selection, replication, machine translation, computer vision, python
 
 # Code URL and DOI/SWH (url is mandatory for replication, doi after acceptance)
 # You can get a DOI for your code from Zenodo, or an SWH identifier from
@@ -58,18 +58,15 @@ replication:
   - doi: 10.48550/arXiv.1911.04946
 
 # Don't forget to surround abstract with double quotes
-abstract: "Three years have passed since ReScience published its first article
-           and since September 2015, things have been going steadily. We're
-           still alive, independent and without a budget. In the meantime, we
-           have published around 20 articles (mostly in computational
-           neuroscience & computational ecology) and the initial has grown
-           from around 10 to roughly 100 members (editors and reviewers), we
-           have advertised ReScience at several conferences worldwide, gave
-           some interviews and we published an article introducing ReScience in
-           PeerJ. Based on our experience at managing the journal during these
-           three years, we think the time is ripe for proposing some changes."
+abstract: "This paper presents a reproducibility study of the work 
+          'Optimizing Deep Learning Inference on Embedded Systems Through Adaptive Model Selection.' 
+          The original study proposes methods for improving deep learning inference on power-constrained 
+          systems using a premodel selection pipeline. Our replication focuses on reproducing their results 
+          in image classification and machine translation. We implemented most of the code from scratch 
+          and attempted to replicate the key findings. While we achieved similar results in some areas, 
+          our overall findings differ due to missing methodological details in the original article."
 
-# Bibliography file (yours)
+# Bibliography file 
 bibliography: bibliography.bib
   
 # Type of the article
@@ -77,14 +74,14 @@ bibliography: bibliography.bib
 #  * Editorial
 #  * Letter
 #  * Replication
-type: Editorial
+type: Replication
 
 # Scientific domain of the article (e.g. Computational Neuroscience)
 #  (one domain only & try to be not overly specific)
-domain: 
+domain: Machine Learning
 
 # Coding language (main one only if several)
-language:
+language: Python
 
   
 # To be filled by the author(s) after acceptance
