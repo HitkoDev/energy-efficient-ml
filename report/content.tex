@@ -18,7 +18,9 @@ Implementing the core idea in code was relatively straightforward, as the founda
 It was very difficult to understand what values and procedures the original authors used to procure their results for model selection, feature engineering and model training. Specifically, the lack of explicitly stated methods used for feature engineering and only referencing an overview study of the subject. Furthermore, for premodel results, the only reported accuracy values were in comparison to oracle performance, which was stated nowhere in the original article. 
 
 \subsubsection{Communication with original authors}
-We attempted to contact the original authors about their results over email, listed in their original article, however no response was received.
+%We attempted to contact the original authors about their results over email, listed in their original article, however no response was received. -> We contacted the aouthors via email listed in the original paper, but they did not respond.
+
+We contacted the authors via email listed in the original paper, but they did not respond.
 
 
 
@@ -37,8 +39,9 @@ Authors have the following claims:
 	      The authors claim that, using the premodel selection pipeline, we can surpass the accuracy of any one of pretrained networks. They state an improvement of 7.52\% compared to the most-accurate single deep learning model.
 	      
 	\item \textbf{Claim 2: image classification reduction in inference time.}
-	      
-	      The authors claim that using the premodels, we can reduce the inference time by more than half ("1.8x reduction in inference time") that of using only the most accurate model - ResNet152.
+	    %Scope of reproduciblity, Claim2: Čudni narekovaji (če imamo te ukrivljene, moramo imeti '' in ´´, ne?). Pa zakaj imamo tu v narekovajih, pri Claim 3 pa podobnega stavka ne?
+	      %The authors claim that using the premodels, we can reduce the inference time by more than half ("1.8x reduction in inference time") that of using only the most accurate model - ResNet152.
+       The authors claim that using the premodels, we can achieve a 1.8x reduction in inference time, compared to using only the most accurate model - ResNet152.
 	      
 	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
 	      
@@ -68,6 +71,10 @@ The premodel combinations were compared in inference time, as model construction
 In the original paper, the premodel is constructed with three consecutive simple models, to estimate large neural network performance. Specifically, quick model selection among 4 pre-trained image-classification neural network models - specifically \textit{mobilenet v1, resnet50 v1, inception v2, and resnet 152 v2}. As per the original authors, we tested all configurations of the three premodel variations on different hierarchy levels, ensuring performance with 10-fold cross-validation.
 
 For comparison, runtime and accuracy as they report it is shown in Figure \ref{fig:11a_orig}, while our results are shown in Figure \ref{fig:11a_ours}. Some of these differences could be attributed to the lack of clear information on what features the authors used, and how they were extracted or augmented.
+
+%Figure 1: A to je prav iz originalnega članka? Dajte si malo pogledat, pod kakšno licenco je originalni članek. Če je copyrighted, je načeloma potrebno pridobiti soglasje. Worst case se morate sklicevati na ta figure v originalnem članku in ga ne imeti v članku.
+
+%Original na arXiv u uporablja licenco CC4.0 (apparently se licence pogleda pod download gumbi na arXivu) - we are free to redistribute, share and edit, as long as we tell that we did
 
 \begin{figure}
 	\centering
@@ -102,7 +109,7 @@ Based on the original article, the models were trained on \textquote*[{\cite[p. 
 \begin{figure}[h]
 	\centering
 	\includegraphics[width=0.75\textwidth]{figures/tf-nmt_paper_training.pdf}
-	\caption{Comparison of training metrics when training the same Tensorflow-NMT model on WMT English-German newstest dataset (paper) and the whole WMT English-German dataset used by the Tensorflow-NMT authors (TF-NMT). It's clear that, at least without significant changes to the hyperparameters, the newstest dataset isn't sufficient to train Tensorflow-NMT models.}
+	\caption{Comparison of training metrics when training the same Tensorflow-NMT model on WMT English-German newstest dataset (paper) and the whole WMT English-German dataset used by the Tensorflow-NMT authors (TF-NMT). It is clear that, at least without significant changes to the hyperparameters, the newstest dataset isn't sufficient to train Tensorflow-NMT models.}
 	\label{fig:tf-nmt_paper_training}
 \end{figure}
 
@@ -156,16 +163,25 @@ For calculating the aspect ratio and area/perimeter ratio of the main object, we
 Our correlation analysis revealed significant differences from the original study. For instance, the correlation between different hue bins and between various edge angle bins diverged from the patterns reported in the original paper. These differences could potentially impact the effectiveness of the feature set in predictive modelling.
 
 \paragraph{Visualisation of Correlations}
-To effectively communicate our findings, we have included a heatmap of the Pearson correlation matrix of the features we computed \ref{fig:correlation_matrix}. This visualisation provides an intuitive understanding of the relationships between different features in our implementation.
+To effectively communicate our findings, we have included a heatmap of the Pearson correlation matrix of the features we computed (See Figure \ref{fig:correlation_matrix}). This visualisation provides an intuitive understanding of the relationships between different features in our implementation.
 
+%Visualisation of Correlations: we computed 6 -> verjetno manjka (see Figure 6)?
+
+
+
+%Figure 6: Ta bi lahko bil preko celotne širine, ker se slabo vidi. 
+%TODO: poglej a je to kje popolnoma sesulo formatting (i love latex figures)
+
+%Figure 6, 7: Jaz bi odstranil naslov Correlation Matrix.
 \begin{figure}[h]
-	\centering
-	\includegraphics[width=0.75\textwidth]{figures/cv_corr_matrix.pdf}
+    \centering
+	\includegraphics[width=0.9\textwidth]{report/figures/cv_corr_matrix1.pdf}
 	\caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
 	\label{fig:correlation_matrix}
 \end{figure}
 
-It's important to note that these differences in correlations might influence the model's performance and generalizability, and our observations suggest areas where further research and clarification from the original authors might be beneficial.
+%It's -> It is (se pojavi na več mestih)
+It is important to note that these differences in correlations might influence the model's performance and generalizability, and our observations suggest areas where further research and clarification from the original authors might be beneficial.
 
 \begin{table}[h]
 	\centering
@@ -198,11 +214,11 @@ Our analysis revealed several notable correlations: \textit{n\_words} correlated
 Consistent with the original paper, we incorporated a BoW representation for each sentence. For that, we used Scikit-learn implementation with Chi-square feature reduction.
 
 \paragraph{Correlation Matrix Visualisation}
-To illustrate the feature correlations in our implementation, we included a heatmap of the Pearson correlation matrix, as shown below:
-
+To illustrate the feature correlations in our implementation, we included a heatmap of the Pearson correlation matrix, as shown in Figure \ref{fig:nlp_correlation_matrix}.
+%Figure 6, 7: Jaz bi odstranil naslov Correlation Matrix.
 \begin{figure}[h]
 	\centering
-	\includegraphics[width=0.75\textwidth]{figures/text_corr_matrix.pdf}
+	\includegraphics[width=0.7\textwidth]{figures/text_corr_matrix1.pdf}
 	\caption{Heatmap of the Pearson correlation matrix for the features in our machine translation feature engineering.}
 	\label{fig:nlp_correlation_matrix}
 \end{figure}
@@ -235,8 +251,8 @@ When reporting accuracies for premodels, we report accuracy compared to oracle m
 Regarding original authors' claims:
 \begin{itemize}
 	\item \textbf{Claim 1: image classification top-1 accuracy improvement.}
-	      
-	      Using this premodel pipeline, we succesfully surpassed best models with same best premodel sequence.
+	      %with same best premodel -> with the same best premodel
+	      Using this premodel pipeline, we succesfully surpassed best models with the same best premodel sequence.
 	      
 	\item \textbf{Claim 2: image classification reduction in inference time.}
 	      
@@ -244,14 +260,21 @@ Regarding original authors' claims:
 	      
 	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
 	      
-	      While different premodels did reduce inference time close to what has been reported in the original paper, they didn't show any improvement in accuracy over the baseline 3\_layer model due to a large number of misclassified sentences. However, it's worth noting that our 3\_layer model achieves marginally worse overall performance than gnmt\_8\_layer model, and since the models are much more similar in architecture than those used for image classification we weren't expecting to see any major improvement.
+	      While different premodels did reduce inference time close to what has been reported in the original paper, they didn't show any improvement in accuracy over the baseline 3\_layer model due to a large number of misclassified sentences. However, it is worth noting that our 3\_layer model achieves marginally worse overall performance than gnmt\_8\_layer model, and since the models are much more similar in architecture than those used for image classification we weren't expecting to see any major improvement.
 	      
 \end{itemize}
 
 
 
 \section{Discussion}
-Trying to replicate the methods and results described in the paper was very much about connecting the dots and filling the blanks. While the original paper clearly notes what models and images were used for image classification task, with both readily available online, it fails to do the same for machine translation part, or does it with plenty of ambiguity. It's also unclear how the datasets for training and evaluation of the premodels were obtained, as neither the data used nor the exact code to generate the data are available. The authors provided an extensive report on feature selection and evaluation, and made great effort justifying their results. However, we could not verify any of that as even our best-effort results only vaguely aligned with the original paper and never matched the improvement claimed by the authors.
+%Trying to replicate the methods and results described in the paper was very much about connecting the dots and filling the blanks. -> To bi lahko povedali na malo bolj formalen način. V smislu, da ni bilo dovolj informacij za reprodukcijo, zato ste določene korake dopolnili po lastni presoji.
 
-%We believe that a good and well-written article should be completely reproducible. Sadly, this one does not seem to be like that. The chosen procedures are barely described, if at all, and reasoning for decisions is often omitted. If we were to manually try tens, or perhaps even hundreds of different approaches of how to pose and process the data, we may be able to eventually approach the results, as presented in the original article. If the results are real in the first place.
-We believe that a well-written research article should be entirely reproducible. Unfortunately, without detailed information, it is challenging to replicate the results, and we had to explore numerous alternative approaches to approximate the outcomes presented in the original article. This lack of transparency raises concerns about the reliability of the reported findings and scientific correctness of methods used by the authors.
+Due to insufficient information for reproduction of methods and results described in the paper, we have estimated the procedures used as best as we could. While the original paper clearly notes what models and images were used for image classification task, with both readily available online, it fails to do the same for machine translation part, 
+%or does it with plenty of ambiguity. -> or is ambigious.
+or is it ambiguous. It is also unclear how the datasets for training and evaluation of the premodels were obtained, as neither the data used nor the exact code to generate the data are available. The authors provided an extensive report on feature selection and evaluation, and made great effort justifying their results. 
+%However, we could not verify any of that -> However, we could not replicate those results 
+However, we could not replicate those results, as even our best-effort results only vaguely aligned with the original paper and never matched the improvement claimed by the authors.
+
+%We believe that a well written research article should be entirely reproducible. Unfortunately, without detailed information, it is challenging to replicate the results, and we had to explore numerous alternative approaches to approximate the outcomes presented in the original article. This lack of transparency raises concerns about the reliability of the reported findings and scientific correctness of methods used by the authors. -> prvi del tega odstavka je samoumeven, drugi del pa je tudi že bil v bistvu povedan (med vrsticami in direktno). Jaz bi izpustil ta odstavek.
+
+%We believe that a well-written research article should be entirely reproducible. Unfortunately, without detailed information, it is challenging to replicate the results, and we had to explore numerous alternative approaches to approximate the outcomes presented in the original article. This lack of transparency raises concerns about the reliability of the reported findings and scientific correctness of methods used by the authors.
