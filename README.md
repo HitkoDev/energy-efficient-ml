@@ -24,7 +24,3 @@ Our results diverged significantly from those reported in the original paper, pa
 ## License
 
 This project is licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/).
-
----
-
-You can adjust details based on the specific content of your project.
