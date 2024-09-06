@@ -6,6 +6,11 @@ from sklearn.feature_extraction.text import CountVectorizer
 from collections import Counter
 import string
 
+# python -m spacy download en_core_web_sm
+import nltk
+nltk.download('punkt_tab')
+nltk.download('wordnet')
+
 def create_bow_model(sentences):
     vectorizer = CountVectorizer()
     vectorizer.fit(sentences)
@@ -65,7 +70,7 @@ base_dir = "/home/drew99/School/MLDS2/wmt16de"
 # Loading sentences from files
 english_file_path = f'{base_dir}/train.en'
 bpe_file_path = f'{base_dir}/train.tok.bpe.32000.en'
-
+print("loading sentences...")
 # Load sentences
 with open(english_file_path, 'r', newline='\n', encoding='utf-8') as file_en, open(bpe_file_path, 'r', encoding='utf-8') as file_bpe:
     english_sentences = [line.strip() for line in file_en]
@@ -81,10 +86,10 @@ num_sentences = 5000
 english_sentences = english_sentences[:num_sentences]
 bpe_sentences = bpe_sentences[:num_sentences]
 # print(english_sentences[:5], "\n", bpe_sentences[:5])
-
+print("creating BoW model...")
 # Create a BoW model based on the English sentences
 bow_vectorizer = create_bow_model(english_sentences)
-
+print("extracting features...")
 # Extract features from English sentences
 features_list = [extract_features(eng_sent, bpe_sent, bow_vectorizer) for eng_sent, bpe_sent in zip(english_sentences, bpe_sentences)]
 
