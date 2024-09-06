@@ -35,18 +35,18 @@ Here we attempt to reproduce their work on the two DNN domains described in the 
 Authors have the following claims:
 \begin{itemize}
 	\item \textbf{Claim 1: image classification top-1 accuracy improvement.}
-	      
+	      	      
 	      The authors claim that, using the premodel selection pipeline, we can surpass the accuracy of any one of pretrained networks. They state an improvement of 7.52\% compared to the most-accurate single deep learning model.
-	      
+	      	      
 	\item \textbf{Claim 2: image classification reduction in inference time.}
-	    %Scope of reproduciblity, Claim2: Čudni narekovaji (če imamo te ukrivljene, moramo imeti '' in ´´, ne?). Pa zakaj imamo tu v narekovajih, pri Claim 3 pa podobnega stavka ne?
+	      %Scope of reproduciblity, Claim2: Čudni narekovaji (če imamo te ukrivljene, moramo imeti '' in ´´, ne?). Pa zakaj imamo tu v narekovajih, pri Claim 3 pa podobnega stavka ne?
 	      %The authors claim that using the premodels, we can reduce the inference time by more than half ("1.8x reduction in inference time") that of using only the most accurate model - ResNet152.
-       The authors claim that using the premodels, we can achieve a 1.8x reduction in inference time, compared to using only the most accurate model - ResNet152.
-	      
+	      The authors claim that using the premodels, we can achieve a 1.8x reduction in inference time, compared to using only the most accurate model - ResNet152.
+	      	      
 	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
-	      
+	      	      
 	      The authors claim a 1.34x reduction in inference time without a significant loss in accuracy.
-	      
+	      	      
 \end{itemize}
 
 
@@ -94,8 +94,8 @@ For comparison, runtime and accuracy as they report it is shown in Figure \ref{f
 	\end{subfigure}
 	\caption{Our premodel results. Both accuracy and time show a large variation between different premodel combinations. Notably, large differences can arise from small changes such as number of training instances of the premodels. Less trained premodels are worse in well-distributing instances and result in lower inference speed.}
 	\label{fig:11a_ours}
-	
-	
+		
+		
 \end{figure}
 
 \subsection{Machine translation}
@@ -174,7 +174,7 @@ To effectively communicate our findings, we have included a heatmap of the Pears
 
 %Figure 6, 7: Jaz bi odstranil naslov Correlation Matrix.
 \begin{figure}[h]
-    \centering
+	\centering
 	\includegraphics[width=0.9\textwidth]{report/figures/cv_corr_matrix1.pdf}
 	\caption{Heatmap of the Pearson correlation matrix for the features in our image classification feature engineering.}
 	\label{fig:correlation_matrix}
@@ -253,15 +253,15 @@ Regarding original authors' claims:
 	\item \textbf{Claim 1: image classification top-1 accuracy improvement.}
 	      %with same best premodel -> with the same best premodel
 	      Using this premodel pipeline, we succesfully surpassed best models with the same best premodel sequence.
-	      
+	      	      
 	\item \textbf{Claim 2: image classification reduction in inference time.}
-	      
+	      	      
 	      Using any premodel combination significantly speeds up image classification, as opposed to always using the "strongest" model. Notably, we observed even larger speed-up that expected, from almost 3x with the worst premodel combination up to almost 7x.
-	      
+	      	      
 	\item \textbf{Claim 3: machine translation reduce inference time without affecting accuracy.}
-	      
+	      	      
 	      While different premodels did reduce inference time close to what has been reported in the original paper, they didn't show any improvement in accuracy over the baseline 3\_layer model due to a large number of misclassified sentences. However, it is worth noting that our 3\_layer model achieves marginally worse overall performance than gnmt\_8\_layer model, and since the models are much more similar in architecture than those used for image classification we weren't expecting to see any major improvement.
-	      
+	      	      
 \end{itemize}
 
 
